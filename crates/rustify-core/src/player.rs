@@ -717,10 +717,14 @@ fn create_output_stream(
         .default_output_config()
         .map_err(|e| RustifyError::Audio(e.to_string()))?;
 
+    let device_channels = config.channels() as usize;
     let config: cpal::StreamConfig = config.into();
 
     let mut buf: VecDeque<f32> = VecDeque::with_capacity(8192);
 
+    // Decoded audio is interleaved stereo (L R L R...).
+    // The device may have more channels (e.g. 8 on some USB audio).
+    // We map stereo to the first 2 device channels and silence the rest.
     let stream = device
         .build_output_stream(
             &config,
@@ -732,17 +736,31 @@ fn create_output_stream(
                 }
 
                 let gain = mixer.gain();
-                for sample in data.iter_mut() {
-                    if buf.is_empty() {
+
+                // Process one device frame at a time
+                for frame in data.chunks_mut(device_channels) {
+                    // Pop one stereo pair (L, R) from decoded audio
+                    let left = if buf.is_empty() {
                         match audio_rx.try_recv() {
-                            Ok(chunk) => buf.extend(chunk),
-                            Err(_) => {
-                                *sample = 0.0;
-                                continue;
+                            Ok(chunk) => {
+                                buf.extend(chunk);
+                                buf.pop_front().unwrap_or(0.0)
                             }
+                            Err(_) => 0.0,
                         }
+                    } else {
+                        buf.pop_front().unwrap_or(0.0)
+                    };
+                    let right = buf.pop_front().unwrap_or(left);
+
+                    // Map stereo to device channels, silence extras
+                    for (i, sample) in frame.iter_mut().enumerate() {
+                        *sample = match i {
+                            0 => left * gain,
+                            1 => right * gain,
+                            _ => 0.0,
+                        };
                     }
-                    *sample = buf.pop_front().unwrap_or(0.0) * gain;
                 }
             },
             |err| {

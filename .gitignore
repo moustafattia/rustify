@@ -1,0 +1,18 @@
+/target/
+**/*.rs.bk
+*.pdb
+*.so
+*.dylib
+*.dll
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.whl
+
+# IDE
+.idea/
+.vscode/
+*.swp

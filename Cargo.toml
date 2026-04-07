@@ -1,0 +1,4 @@
+[workspace]
+members = ["crates/rustify-core", "bindings/python"]
+default-members = ["crates/rustify-core"]
+resolver = "2"

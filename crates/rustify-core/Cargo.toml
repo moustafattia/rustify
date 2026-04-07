@@ -1,0 +1,21 @@
+[package]
+name = "rustify-core"
+version = "0.1.0"
+edition = "2021"
+description = "Embedded Rust media player library for YoyoPod"
+
+[dependencies]
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "flac", "ogg", "wav", "pcm"] }
+cpal = "0.15"
+crossbeam = "0.8"
+walkdir = "2"
+lofty = "0.22"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"
+hound = "3"
+
+[[example]]
+name = "play"
+path = "../../examples/play.rs"

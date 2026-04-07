@@ -354,8 +354,10 @@ impl CommandLoop {
                     self.stop_decode();
                     self.start_decode(uri);
                 } else {
-                    // End of tracklist
-                    self.stop_decode();
+                    // End of tracklist — let remaining audio drain naturally.
+                    // Don't call stop_decode() which would clear the buffer
+                    // and cut off the last seconds of audio.
+                    self.decode_handle = None;
                     self.set_state(PlaybackState::Stopped);
                     *self.shared.current_track.lock().unwrap() = None;
                     self.shared.time_position_ms.store(0, Ordering::Relaxed);

@@ -47,6 +47,7 @@ impl Tracklist {
 
     /// Advance to the next track and return its URI.
     /// Returns None if already at the end.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&str> {
         let idx = self.current_index?;
         if idx + 1 < self.tracks.len() {

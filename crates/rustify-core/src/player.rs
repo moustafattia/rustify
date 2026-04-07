@@ -31,6 +31,7 @@ pub struct Player {
     cmd_tx: Sender<PlayerCommand>,
     shared: Arc<SharedState>,
     mixer: Arc<Mixer>,
+    #[allow(dead_code)] // used by Python bindings layer
     music_dirs: Vec<PathBuf>,
     _command_thread: Option<JoinHandle<()>>,
 }
@@ -307,9 +308,8 @@ impl CommandLoop {
                     }
                 }
                 recv(self.event_rx) -> event => {
-                    match event {
-                        Ok(evt) => self.handle_event(evt),
-                        Err(_) => {} // No decode thread running
+                    if let Ok(evt) = event {
+                        self.handle_event(evt);
                     }
                 }
             }

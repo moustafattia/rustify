@@ -222,6 +222,9 @@ enum InternalEvent {
     TrackChanged(Track),
     Position(u64),
     TrackEnded,
+    /// Decode thread failed to open/decode the track and exited.
+    /// Command loop must reset state to Stopped.
+    DecodeFailed(String),
     Error(String),
 }
 
@@ -357,6 +360,15 @@ impl CommandLoop {
                     self.shared.time_position_ms.store(0, Ordering::Relaxed);
                 }
             }
+            InternalEvent::DecodeFailed(msg) => {
+                // Decode thread exited without producing audio.
+                // Reset state so the player doesn't get stuck in Playing.
+                self.decode_handle = None;
+                self.set_state(PlaybackState::Stopped);
+                *self.shared.current_track.lock().unwrap() = None;
+                self.shared.time_position_ms.store(0, Ordering::Relaxed);
+                self.emit_callbacks(PlayerEvent::Error(msg));
+            }
             InternalEvent::Error(msg) => {
                 self.emit_callbacks(PlayerEvent::Error(msg));
             }
@@ -420,6 +432,8 @@ impl CommandLoop {
 
     fn handle_seek(&mut self, ms: u64) {
         if let Some(ref handle) = self.decode_handle {
+            // Clear buffered pre-seek audio so it doesn't keep playing
+            self.clear_buffer.store(true, Ordering::Relaxed);
             handle.control_tx.send(DecodeControl::Seek(ms)).ok();
         }
     }
@@ -519,7 +533,7 @@ fn decode_thread(
         Ok(f) => f,
         Err(e) => {
             event_tx
-                .send(InternalEvent::Error(format!("open: {e}")))
+                .send(InternalEvent::DecodeFailed(format!("open: {e}")))
                 .ok();
             return;
         }
@@ -540,7 +554,7 @@ fn decode_thread(
         Ok(p) => p,
         Err(e) => {
             event_tx
-                .send(InternalEvent::Error(format!("probe: {e}")))
+                .send(InternalEvent::DecodeFailed(format!("probe: {e}")))
                 .ok();
             return;
         }
@@ -551,7 +565,7 @@ fn decode_thread(
         Some(t) => t,
         None => {
             event_tx
-                .send(InternalEvent::Error("no audio track found".into()))
+                .send(InternalEvent::DecodeFailed("no audio track found".into()))
                 .ok();
             return;
         }
@@ -566,7 +580,7 @@ fn decode_thread(
         Ok(d) => d,
         Err(e) => {
             event_tx
-                .send(InternalEvent::Error(format!("decoder: {e}")))
+                .send(InternalEvent::DecodeFailed(format!("decoder: {e}")))
                 .ok();
             return;
         }
@@ -713,12 +727,19 @@ fn create_output_stream(
         .default_output_device()
         .ok_or_else(|| RustifyError::Audio("no default output device".into()))?;
 
-    let config = device
+    let supported_config = device
         .default_output_config()
         .map_err(|e| RustifyError::Audio(e.to_string()))?;
 
-    let device_channels = config.channels() as usize;
-    let config: cpal::StreamConfig = config.into();
+    let device_channels = supported_config.channels() as usize;
+
+    // Force f32 sample format — our decode pipeline outputs f32.
+    // Override the device default which may be i16/u16 on some ALSA backends.
+    let config = cpal::StreamConfig {
+        channels: supported_config.channels(),
+        sample_rate: supported_config.sample_rate(),
+        buffer_size: cpal::BufferSize::Default,
+    };
 
     let mut buf: VecDeque<f32> = VecDeque::with_capacity(8192);
 

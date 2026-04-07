@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rustify"
+version = "0.1.0"
+description = "Embedded Rust media player for YoyoPod"
+requires-python = ">=3.9"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+manifest-path = "bindings/python/Cargo.toml"
+python-source = "bindings/python"
+module-name = "rustify._rustify"

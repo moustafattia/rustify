@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install ALSA dev headers
+        run: sudo apt-get install -y libasound2-dev
+      - run: cargo test --workspace
+      - run: cargo clippy -- -D warnings
+      - run: cargo fmt --check
+
+  build-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ALSA dev headers
+        run: sudo apt-get install -y libasound2-dev
+      - uses: PyO3/maturin-action@v1
+        with:
+          args: --release

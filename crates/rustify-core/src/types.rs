@@ -62,6 +62,9 @@ pub enum PlayerCommand {
     Shutdown,
 }
 
+/// Supported audio file extensions.
+pub const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav"];
+
 /// Convert a `file://` URI to a filesystem path.
 /// Also accepts plain paths (returned as-is).
 pub fn uri_to_path(uri: &str) -> PathBuf {

@@ -3,10 +3,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use crate::error::RustifyError;
-use crate::types::path_to_uri;
-
-/// Supported audio file extensions.
-const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav"];
+use crate::types::{path_to_uri, AUDIO_EXTENSIONS};
 
 /// Recursively scan a directory for audio files.
 /// Returns sorted `file://` URIs for all files matching supported extensions.

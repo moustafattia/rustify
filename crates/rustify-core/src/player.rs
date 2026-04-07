@@ -168,6 +168,12 @@ impl Player {
     }
 }
 
+impl Drop for Player {
+    fn drop(&mut self) {
+        self.cmd_tx.send(PlayerCommand::Shutdown).ok();
+    }
+}
+
 // --- Shared State ---
 
 struct SharedState {
@@ -267,6 +273,10 @@ impl CommandLoop {
         // Create the cpal output stream
         let stream =
             create_output_stream(audio_rx, Arc::clone(&mixer), Arc::clone(&clear_buffer));
+
+        if let Err(ref e) = stream {
+            eprintln!("rustify: failed to create audio stream: {e}");
+        }
 
         Self {
             cmd_rx,
@@ -489,7 +499,7 @@ fn decode_thread(
 ) {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
-    use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo};
+    use symphonia::core::formats::FormatOptions;
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
     use symphonia::core::probe::Hint;

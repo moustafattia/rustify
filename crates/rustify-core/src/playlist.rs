@@ -2,10 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::RustifyError;
-use crate::types::{path_to_uri, Playlist};
-
-/// Supported audio file extensions for playlist entries.
-const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav"];
+use crate::types::{path_to_uri, Playlist, AUDIO_EXTENSIONS};
 
 /// Parse an M3U playlist file and return resolved file:// URIs.
 ///

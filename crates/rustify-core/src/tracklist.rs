@@ -116,10 +116,7 @@ mod tests {
     #[test]
     fn load_sets_current_to_first() {
         let mut tl = Tracklist::new();
-        tl.load(vec![
-            "file:///a.mp3".into(),
-            "file:///b.mp3".into(),
-        ]);
+        tl.load(vec!["file:///a.mp3".into(), "file:///b.mp3".into()]);
         assert_eq!(tl.len(), 2);
         assert_eq!(tl.index(), Some(0));
         assert_eq!(tl.current(), Some("file:///a.mp3"));

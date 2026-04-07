@@ -51,12 +51,7 @@ impl Player {
         let handle = thread::Builder::new()
             .name("rustify-cmd".into())
             .spawn(move || {
-                let mut cmd_loop = CommandLoop::new(
-                    cmd_rx,
-                    shared_clone,
-                    mixer_clone,
-                    alsa_device,
-                );
+                let mut cmd_loop = CommandLoop::new(cmd_rx, shared_clone, mixer_clone, alsa_device);
                 cmd_loop.run();
             })
             .map_err(|e| RustifyError::Audio(format!("failed to spawn command thread: {e}")))?;
@@ -272,8 +267,7 @@ impl CommandLoop {
         let clear_buffer = Arc::new(AtomicBool::new(false));
 
         // Create the cpal output stream
-        let stream =
-            create_output_stream(audio_rx, Arc::clone(&mixer), Arc::clone(&clear_buffer));
+        let stream = create_output_stream(audio_rx, Arc::clone(&mixer), Arc::clone(&clear_buffer));
 
         if let Err(ref e) = stream {
             eprintln!("rustify: failed to create audio stream: {e}");
@@ -692,7 +686,13 @@ fn seek_to(
         (ms as f64 / 1000.0 * sample_rate as f64) as u64
     };
 
-    if let Err(e) = format.seek(SeekMode::Coarse, SeekTo::TimeStamp { ts: seek_ts, track_id }) {
+    if let Err(e) = format.seek(
+        SeekMode::Coarse,
+        SeekTo::TimeStamp {
+            ts: seek_ts,
+            track_id,
+        },
+    ) {
         event_tx
             .send(InternalEvent::Error(format!("seek: {e}")))
             .ok();

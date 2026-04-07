@@ -18,9 +18,7 @@ pub fn scan_directory(path: &Path) -> Result<Vec<String>, RustifyError> {
     let mut uris = Vec::new();
 
     for entry in WalkDir::new(path).follow_links(true) {
-        let entry = entry.map_err(|e| {
-            RustifyError::Io(std::io::Error::other(e.to_string()))
-        })?;
+        let entry = entry.map_err(|e| RustifyError::Io(std::io::Error::other(e.to_string())))?;
 
         if !entry.file_type().is_file() {
             continue;

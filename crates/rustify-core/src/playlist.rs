@@ -10,9 +10,8 @@ use crate::types::{path_to_uri, Playlist, AUDIO_EXTENSIONS};
 /// Relative paths are resolved against the M3U file's parent directory.
 /// Only entries with supported audio extensions are included.
 pub fn parse_m3u(path: &Path) -> Result<Vec<String>, RustifyError> {
-    let content = fs::read_to_string(path).map_err(|e| {
-        RustifyError::Playlist(format!("failed to read {}: {e}", path.display()))
-    })?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| RustifyError::Playlist(format!("failed to read {}: {e}", path.display())))?;
 
     let base_dir = path
         .parent()
@@ -137,11 +136,7 @@ mod tests {
     #[test]
     fn parse_m3u_skips_blank_lines_and_comments() {
         let dir = TempDir::new().unwrap();
-        let m3u = create_m3u(
-            dir.path(),
-            "test.m3u",
-            "\n# comment\n\n/music/song.mp3\n\n",
-        );
+        let m3u = create_m3u(dir.path(), "test.m3u", "\n# comment\n\n/music/song.mp3\n\n");
         let uris = parse_m3u(&m3u).unwrap();
         assert_eq!(uris.len(), 1);
     }
@@ -162,7 +157,11 @@ mod tests {
     #[test]
     fn parse_m3u_case_insensitive_extensions() {
         let dir = TempDir::new().unwrap();
-        let m3u = create_m3u(dir.path(), "test.m3u", "/music/song.MP3\n/music/song.Flac\n");
+        let m3u = create_m3u(
+            dir.path(),
+            "test.m3u",
+            "/music/song.MP3\n/music/song.Flac\n",
+        );
         let uris = parse_m3u(&m3u).unwrap();
         assert_eq!(uris.len(), 2);
     }

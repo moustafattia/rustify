@@ -179,9 +179,7 @@ impl RustifyClient {
         for dir in &self.music_dirs {
             match scanner::scan_directory(dir) {
                 Ok(uris) => all_uris.extend(uris),
-                Err(e) => {
-                    return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-                }
+                Err(e) => return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         }
         all_uris.sort();
@@ -195,9 +193,7 @@ impl RustifyClient {
         for dir in &self.music_dirs {
             match playlist::find_playlists(dir) {
                 Ok(pls) => all_playlists.extend(pls.into_iter().map(PyPlaylist::from)),
-                Err(e) => {
-                    return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-                }
+                Err(e) => return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         }
         Ok(all_playlists)
@@ -249,25 +245,23 @@ impl RustifyClient {
     }
 
     fn on_position_update(&self, callback: PyObject) {
-        self.player
-            .on_position_update(Box::new(move |ms: u64| {
-                Python::with_gil(|py| {
-                    if let Err(e) = callback.call1(py, (ms,)) {
-                        eprintln!("Python on_position_update callback error: {e}");
-                    }
-                });
-            }));
+        self.player.on_position_update(Box::new(move |ms: u64| {
+            Python::with_gil(|py| {
+                if let Err(e) = callback.call1(py, (ms,)) {
+                    eprintln!("Python on_position_update callback error: {e}");
+                }
+            });
+        }));
     }
 
     fn on_error(&self, callback: PyObject) {
-        self.player
-            .on_error(Box::new(move |msg: String| {
-                Python::with_gil(|py| {
-                    if let Err(e) = callback.call1(py, (msg,)) {
-                        eprintln!("Python on_error callback error: {e}");
-                    }
-                });
-            }));
+        self.player.on_error(Box::new(move |msg: String| {
+            Python::with_gil(|py| {
+                if let Err(e) = callback.call1(py, (msg,)) {
+                    eprintln!("Python on_error callback error: {e}");
+                }
+            });
+        }));
     }
 
     // --- Lifecycle ---

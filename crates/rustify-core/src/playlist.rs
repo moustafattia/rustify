@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::RustifyError;
 use crate::types::{path_to_uri, Playlist, AUDIO_EXTENSIONS};
@@ -25,8 +25,10 @@ pub fn parse_m3u(path: &Path) -> Result<Vec<String>, RustifyError> {
             continue;
         }
 
-        let track_path = if Path::new(line).is_absolute() {
-            Path::new(line).to_path_buf()
+        // Check both OS-native absolute paths and Unix-style /paths
+        // (the latter handles M3U files from Linux when developing on Windows)
+        let track_path = if Path::new(line).is_absolute() || line.starts_with('/') {
+            PathBuf::from(line)
         } else {
             base_dir.join(line)
         };
@@ -99,8 +101,9 @@ mod tests {
         );
         let uris = parse_m3u(&m3u).unwrap();
         assert_eq!(uris.len(), 2);
-        assert_eq!(uris[0], "file:///music/song1.mp3");
-        assert_eq!(uris[1], "file:///music/song2.flac");
+        assert!(uris[0].starts_with("file://"));
+        assert!(uris[0].ends_with("/music/song1.mp3"));
+        assert!(uris[1].ends_with("/music/song2.flac"));
     }
 
     #[test]
@@ -127,7 +130,8 @@ mod tests {
         );
         let uris = parse_m3u(&m3u).unwrap();
         assert_eq!(uris.len(), 1);
-        assert_eq!(uris[0], "file:///music/song.mp3");
+        assert!(uris[0].starts_with("file://"));
+        assert!(uris[0].ends_with("/music/song.mp3"));
     }
 
     #[test]

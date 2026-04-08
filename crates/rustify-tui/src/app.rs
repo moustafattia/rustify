@@ -31,17 +31,34 @@ pub enum PlayerAction {
     Seek(i64),
     PlayTrackUri(String),
     LoadTrackUris(Vec<String>),
+    ToggleShuffle,
+    CycleRepeat,
 }
 
 const NAV_ITEMS: &[&str] = &["Artists", "Albums", "Songs", "Playlists"];
 
 /// Now-playing state cached from player callbacks.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct NowPlayingState {
     pub track: Option<Track>,
     pub state: Option<PlaybackState>,
     pub position_ms: u64,
     pub volume: u8,
+    pub shuffle: bool,
+    pub repeat: rustify_core::types::RepeatMode,
+}
+
+impl Default for NowPlayingState {
+    fn default() -> Self {
+        Self {
+            track: None,
+            state: None,
+            position_ms: 0,
+            volume: 0,
+            shuffle: false,
+            repeat: rustify_core::types::RepeatMode::Off,
+        }
+    }
 }
 
 /// Search overlay state.
@@ -155,6 +172,18 @@ impl App {
             }
             KeyCode::Char('p') if self.focus != Focus::Search => {
                 return Some(PlayerAction::Previous);
+            }
+            KeyCode::Char('s') if self.focus != Focus::Search => {
+                return Some(PlayerAction::ToggleShuffle);
+            }
+            KeyCode::Char('r') if self.focus != Focus::Search => {
+                return Some(PlayerAction::CycleRepeat);
+            }
+            KeyCode::Left => {
+                return Some(PlayerAction::Seek(-5000));
+            }
+            KeyCode::Right => {
+                return Some(PlayerAction::Seek(5000));
             }
             KeyCode::Char('+') | KeyCode::Char('=') => {
                 self.now_playing.volume = (self.now_playing.volume + 5).min(100);
@@ -385,6 +414,10 @@ impl App {
             }
             PlayerEvent::Error(msg) => {
                 self.set_status(msg);
+            }
+            PlayerEvent::ModeChanged { shuffle, repeat } => {
+                self.now_playing.shuffle = shuffle;
+                self.now_playing.repeat = repeat;
             }
         }
     }

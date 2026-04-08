@@ -105,6 +105,16 @@ fn main() -> io::Result<()> {
             .ok();
     }));
 
+    let tx_mode = tx.clone();
+    player.on_mode_change(Box::new(move |shuffle, repeat| {
+        tx_mode
+            .send(AppEvent::Player(PlayerEvent::ModeChanged {
+                shuffle,
+                repeat,
+            }))
+            .ok();
+    }));
+
     let mut app = App::new();
     app.now_playing.volume = player.get_volume();
 
@@ -143,8 +153,16 @@ fn main() -> io::Result<()> {
                         app::PlayerAction::Next => player.next(),
                         app::PlayerAction::Previous => player.previous(),
                         app::PlayerAction::Seek(delta) => {
-                            let pos = app.now_playing.position_ms as i64 + delta;
-                            player.seek(pos.max(0) as u64);
+                            let track_len = app
+                                .now_playing
+                                .track
+                                .as_ref()
+                                .map(|t| t.length as i64)
+                                .unwrap_or(0);
+                            let new_pos = (app.now_playing.position_ms as i64 + delta)
+                                .clamp(0, track_len) as u64;
+                            player.seek(new_pos);
+                            app.now_playing.position_ms = new_pos;
                         }
                         app::PlayerAction::PlayTrackUri(uri) => {
                             player.load_track_uris(vec![uri]);
@@ -153,6 +171,14 @@ fn main() -> io::Result<()> {
                         app::PlayerAction::LoadTrackUris(uris) => {
                             player.load_track_uris(uris);
                             player.play();
+                        }
+                        app::PlayerAction::ToggleShuffle => {
+                            let new_state = !app.now_playing.shuffle;
+                            player.set_shuffle(new_state);
+                        }
+                        app::PlayerAction::CycleRepeat => {
+                            let new_mode = app.now_playing.repeat.cycle();
+                            player.set_repeat(new_mode);
                         }
                     }
                 }

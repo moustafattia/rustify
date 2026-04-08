@@ -99,6 +99,14 @@ impl Player {
         self.mixer.get_volume()
     }
 
+    pub fn set_shuffle(&self, on: bool) {
+        self.cmd_tx.send(PlayerCommand::SetShuffle(on)).ok();
+    }
+
+    pub fn set_repeat(&self, mode: crate::types::RepeatMode) {
+        self.cmd_tx.send(PlayerCommand::SetRepeat(mode)).ok();
+    }
+
     pub fn load_track_uris(&self, uris: Vec<String>) {
         self.cmd_tx.send(PlayerCommand::LoadTrackUris(uris)).ok();
     }
@@ -151,6 +159,18 @@ impl Player {
             .lock()
             .unwrap()
             .on_position_update
+            .push(callback);
+    }
+
+    pub fn on_mode_change(
+        &self,
+        callback: Box<dyn Fn(bool, crate::types::RepeatMode) + Send>,
+    ) {
+        self.shared
+            .callbacks
+            .lock()
+            .unwrap()
+            .on_mode_change
             .push(callback);
     }
 
@@ -214,6 +234,7 @@ struct Callbacks {
     on_track_change: Vec<Box<dyn Fn(Track) + Send>>,
     on_position_update: Vec<Box<dyn Fn(u64) + Send>>,
     on_error: Vec<Box<dyn Fn(String) + Send>>,
+    on_mode_change: Vec<Box<dyn Fn(bool, crate::types::RepeatMode) + Send>>,
 }
 
 // --- Internal Events (decode thread -> command loop) ---
@@ -329,6 +350,20 @@ impl CommandLoop {
             PlayerCommand::ClearTracklist => {
                 self.handle_stop();
                 self.tracklist.clear();
+            }
+            PlayerCommand::SetShuffle(on) => {
+                self.tracklist.set_shuffle(on);
+                self.emit_callbacks(PlayerEvent::ModeChanged {
+                    shuffle: self.tracklist.get_shuffle(),
+                    repeat: self.tracklist.get_repeat(),
+                });
+            }
+            PlayerCommand::SetRepeat(mode) => {
+                self.tracklist.set_repeat(mode);
+                self.emit_callbacks(PlayerEvent::ModeChanged {
+                    shuffle: self.tracklist.get_shuffle(),
+                    repeat: self.tracklist.get_repeat(),
+                });
             }
             PlayerCommand::Shutdown => unreachable!(),
         }
@@ -493,6 +528,11 @@ impl CommandLoop {
             PlayerEvent::Error(msg) => {
                 for cb in &callbacks.on_error {
                     cb(msg.clone());
+                }
+            }
+            PlayerEvent::ModeChanged { shuffle, repeat } => {
+                for cb in &callbacks.on_mode_change {
+                    cb(*shuffle, *repeat);
                 }
             }
         }

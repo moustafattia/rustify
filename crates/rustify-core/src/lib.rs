@@ -10,4 +10,4 @@ pub mod types;
 // Re-export primary types at crate root for convenience.
 pub use error::{Result, RustifyError};
 pub use player::{Player, PlayerConfig};
-pub use types::{PlaybackState, PlayerCommand, PlayerEvent, Playlist, Track};
+pub use types::{PlaybackState, PlayerCommand, PlayerEvent, Playlist, RepeatMode, Track};

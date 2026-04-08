@@ -1,0 +1,21 @@
+[package]
+name = "rustify-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Rich terminal music player built on rustify-core"
+
+[[bin]]
+name = "rustify-tui"
+path = "src/main.rs"
+
+[dependencies]
+rustify-core = { path = "../rustify-core" }
+ratatui = "0.29"
+crossterm = "0.28"
+crossbeam = "0.8"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+dirs = "6"
+
+[dev-dependencies]
+tempfile = "3"

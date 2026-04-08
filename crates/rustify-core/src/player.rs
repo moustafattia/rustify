@@ -10,7 +10,7 @@ use crate::error::RustifyError;
 use crate::metadata::read_metadata_from_path;
 use crate::mixer::Mixer;
 use crate::tracklist::Tracklist;
-use crate::types::{uri_to_path, PlaybackState, PlayerCommand, PlayerEvent, Track};
+use crate::types::{uri_to_path, PlaybackState, PlayerCommand, PlayerEvent, RepeatMode, Track};
 
 /// Number of audio chunks buffered between decode and output threads.
 /// At ~1024 frames per chunk @ 44.1kHz stereo, each chunk is ~23ms.
@@ -243,6 +243,8 @@ enum InternalEvent {
     TrackChanged(Track),
     Position(u64),
     TrackEnded,
+    /// Decode thread is nearing the end — pre-start next decode for gapless.
+    TrackEnding { remaining_ms: u64 },
     /// Decode thread failed to open/decode the track and exited.
     /// Command loop must reset state to Stopped.
     DecodeFailed(String),
@@ -272,9 +274,12 @@ struct CommandLoop {
     mixer: Arc<Mixer>,
     tracklist: Tracklist,
     decode_handle: Option<DecodeHandle>,
+    pending_decode: Option<DecodeHandle>,
     audio_tx: Sender<Vec<f32>>,
     _audio_stream: Option<cpal::Stream>,
     clear_buffer: Arc<AtomicBool>,
+    /// Shared slot for pending audio channel — cpal callback reads this for gapless swap.
+    pending_audio_rx: Arc<Mutex<Option<Receiver<Vec<f32>>>>>,
     #[allow(dead_code)]
     alsa_device: String,
 }
@@ -289,9 +294,15 @@ impl CommandLoop {
         let (event_tx, event_rx) = channel::unbounded::<InternalEvent>();
         let (audio_tx, audio_rx) = channel::bounded::<Vec<f32>>(BUFFER_CHUNKS);
         let clear_buffer = Arc::new(AtomicBool::new(false));
+        let pending_audio_rx = Arc::new(Mutex::new(None));
 
         // Create the cpal output stream
-        let stream = create_output_stream(audio_rx, Arc::clone(&mixer), Arc::clone(&clear_buffer));
+        let stream = create_output_stream(
+            audio_rx,
+            Arc::clone(&mixer),
+            Arc::clone(&clear_buffer),
+            Arc::clone(&pending_audio_rx),
+        );
 
         if let Err(ref e) = stream {
             eprintln!("rustify: failed to create audio stream: {e}");
@@ -305,9 +316,11 @@ impl CommandLoop {
             mixer,
             tracklist: Tracklist::new(),
             decode_handle: None,
+            pending_decode: None,
             audio_tx,
             _audio_stream: stream.ok(),
             clear_buffer,
+            pending_audio_rx,
             alsa_device,
         }
     }
@@ -379,20 +392,62 @@ impl CommandLoop {
                 self.shared.time_position_ms.store(ms, Ordering::Relaxed);
                 self.emit_callbacks(PlayerEvent::PositionUpdate(ms));
             }
+            InternalEvent::TrackEnding { remaining_ms: _ } => {
+                // Pre-start next decode for gapless playback
+                if self.pending_decode.is_none() {
+                    // Peek at next track without advancing tracklist
+                    let next_uri = {
+                        let mut clone = self.tracklist.clone();
+                        clone.next().map(String::from)
+                    };
+                    if let Some(uri) = next_uri {
+                        let (pending_tx, pending_rx) =
+                            channel::bounded::<Vec<f32>>(BUFFER_CHUNKS);
+
+                        let (control_tx, control_rx) = channel::unbounded::<DecodeControl>();
+                        let event_tx = self.event_tx.clone();
+
+                        let handle = thread::Builder::new()
+                            .name("rustify-decode-pending".into())
+                            .spawn(move || {
+                                decode_thread(uri, pending_tx, control_rx, event_tx);
+                            })
+                            .expect("failed to spawn pending decode thread");
+
+                        self.pending_decode = Some(DecodeHandle {
+                            control_tx,
+                            _thread: handle,
+                        });
+
+                        // Put the pending rx in the shared slot for the cpal callback
+                        *self.pending_audio_rx.lock().unwrap() = Some(pending_rx);
+                    }
+                }
+            }
             InternalEvent::TrackEnded => {
-                // Try to advance to next track
-                if let Some(uri) = self.tracklist.next() {
-                    let uri = uri.to_string();
-                    self.stop_decode();
-                    self.start_decode(uri);
+                // Gapless: promote pending decode if it exists
+                if let Some(pending) = self.pending_decode.take() {
+                    if self.tracklist.next().is_some() {
+                        self.decode_handle = Some(pending);
+                        // TrackChanged event was already sent by the pending decode thread
+                    } else {
+                        self.decode_handle = None;
+                        self.set_state(PlaybackState::Stopped);
+                        *self.shared.current_track.lock().unwrap() = None;
+                        self.shared.time_position_ms.store(0, Ordering::Relaxed);
+                    }
                 } else {
-                    // End of tracklist — let remaining audio drain naturally.
-                    // Don't call stop_decode() which would clear the buffer
-                    // and cut off the last seconds of audio.
-                    self.decode_handle = None;
-                    self.set_state(PlaybackState::Stopped);
-                    *self.shared.current_track.lock().unwrap() = None;
-                    self.shared.time_position_ms.store(0, Ordering::Relaxed);
+                    // No pending decode — try to advance normally (non-gapless path)
+                    if let Some(uri) = self.tracklist.next() {
+                        let uri = uri.to_string();
+                        self.stop_decode();
+                        self.start_decode(uri);
+                    } else {
+                        self.decode_handle = None;
+                        self.set_state(PlaybackState::Stopped);
+                        *self.shared.current_track.lock().unwrap() = None;
+                        self.shared.time_position_ms.store(0, Ordering::Relaxed);
+                    }
                 }
             }
             InternalEvent::DecodeFailed(msg) => {
@@ -629,6 +684,10 @@ fn decode_thread(
     let mut paused = false;
     let mut sample_buf: Option<SampleBuffer<f32>> = None;
     let mut last_position_report_ms: u64 = 0;
+    let total_samples = track.codec_params.n_frames;
+    let mut decoded_samples: u64 = 0;
+    let mut track_ending_sent = false;
+    const PRE_BUFFER_MS: u64 = 3000;
 
     loop {
         // Check for control messages (non-blocking when not paused)
@@ -715,8 +774,25 @@ fn decode_thread(
             SampleBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec())
         });
 
+        let num_frames = decoded.frames() as u64;
         sbuf.copy_interleaved_ref(decoded);
         let chunk = sbuf.samples().to_vec();
+
+        decoded_samples += num_frames;
+
+        // Check if we're near the end — signal pre-buffer for gapless
+        if !track_ending_sent {
+            if let Some(total) = total_samples {
+                let remaining_samples = total.saturating_sub(decoded_samples);
+                let remaining_ms = remaining_samples * 1000 / sample_rate as u64;
+                if remaining_ms < PRE_BUFFER_MS {
+                    event_tx
+                        .send(InternalEvent::TrackEnding { remaining_ms })
+                        .ok();
+                    track_ending_sent = true;
+                }
+            }
+        }
 
         if audio_tx.send(chunk).is_err() {
             break; // Output stream dropped
@@ -759,6 +835,7 @@ fn create_output_stream(
     audio_rx: Receiver<Vec<f32>>,
     mixer: Arc<Mixer>,
     clear_buffer: Arc<AtomicBool>,
+    pending_audio_rx: Arc<Mutex<Option<Receiver<Vec<f32>>>>>,
 ) -> Result<cpal::Stream, RustifyError> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -773,8 +850,6 @@ fn create_output_stream(
 
     let device_channels = supported_config.channels() as usize;
 
-    // Force f32 sample format — our decode pipeline outputs f32.
-    // Override the device default which may be i16/u16 on some ALSA backends.
     let config = cpal::StreamConfig {
         channels: supported_config.channels(),
         sample_rate: supported_config.sample_rate(),
@@ -782,39 +857,51 @@ fn create_output_stream(
     };
 
     let mut buf: VecDeque<f32> = VecDeque::with_capacity(8192);
+    let mut active_rx = audio_rx;
 
-    // Decoded audio is interleaved stereo (L R L R...).
-    // The device may have more channels (e.g. 8 on some USB audio).
-    // We map stereo to the first 2 device channels and silence the rest.
     let stream = device
         .build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                // Check if we should clear stale audio
                 if clear_buffer.swap(false, Ordering::Relaxed) {
                     buf.clear();
-                    while audio_rx.try_recv().is_ok() {}
+                    while active_rx.try_recv().is_ok() {}
                 }
 
                 let gain = mixer.gain();
 
-                // Process one device frame at a time
                 for frame in data.chunks_mut(device_channels) {
-                    // Pop one stereo pair (L, R) from decoded audio
                     let left = if buf.is_empty() {
-                        match audio_rx.try_recv() {
+                        match active_rx.try_recv() {
                             Ok(chunk) => {
                                 buf.extend(chunk);
                                 buf.pop_front().unwrap_or(0.0)
                             }
-                            Err(_) => 0.0,
+                            Err(_) => {
+                                // Active channel drained — check for pending (gapless swap)
+                                if let Ok(mut slot) = pending_audio_rx.try_lock() {
+                                    if let Some(new_rx) = slot.take() {
+                                        active_rx = new_rx;
+                                        match active_rx.try_recv() {
+                                            Ok(chunk) => {
+                                                buf.extend(chunk);
+                                                buf.pop_front().unwrap_or(0.0)
+                                            }
+                                            Err(_) => 0.0,
+                                        }
+                                    } else {
+                                        0.0
+                                    }
+                                } else {
+                                    0.0
+                                }
+                            }
                         }
                     } else {
                         buf.pop_front().unwrap_or(0.0)
                     };
                     let right = buf.pop_front().unwrap_or(left);
 
-                    // Map stereo to device channels, silence extras
                     for (i, sample) in frame.iter_mut().enumerate() {
                         *sample = match i {
                             0 => left * gain,

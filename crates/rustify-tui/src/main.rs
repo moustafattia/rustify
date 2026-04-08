@@ -191,7 +191,31 @@ fn main() -> io::Result<()> {
                 }
             }
             Ok(AppEvent::Player(event)) => {
+                // Trigger background art extraction on track change
+                if let PlayerEvent::TrackChanged(ref track) = event {
+                    let uri = track.uri.clone();
+                    let art_tx = tx.clone();
+                    thread::Builder::new()
+                        .name("rustify-art".into())
+                        .spawn(move || {
+                            let path = rustify_core::types::uri_to_path(&uri);
+                            let data = rustify_core::art::extract_art(&path);
+                            art_tx
+                                .send(AppEvent::ArtLoaded {
+                                    uri,
+                                    data,
+                                })
+                                .ok();
+                        })
+                        .ok();
+                }
                 app.handle_player_event(event);
+            }
+            Ok(AppEvent::ArtLoaded { uri, data }) => {
+                if app.art.current_uri.as_deref() == Some(&uri) {
+                    app.art.has_art = data.is_some();
+                    app.art.image_bytes = data;
+                }
             }
             Ok(AppEvent::Tick) => {
                 app.handle_tick();

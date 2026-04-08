@@ -61,6 +61,17 @@ impl Default for NowPlayingState {
     }
 }
 
+/// Cached album art state.
+#[derive(Debug, Default)]
+pub struct ArtState {
+    /// URI of the track whose art is currently cached.
+    pub current_uri: Option<String>,
+    /// Whether we have art for the current track.
+    pub has_art: bool,
+    /// Raw image bytes (for rendering by the UI layer).
+    pub image_bytes: Option<Vec<u8>>,
+}
+
 /// Search overlay state.
 #[derive(Debug, Default)]
 pub struct SearchState {
@@ -98,6 +109,7 @@ pub struct App {
     pub status: Option<StatusMessage>,
     pub tick_count: u64,
     pub playlists: Vec<rustify_core::types::Playlist>,
+    pub art: ArtState,
 
     // Per-view list states for ratatui
     pub artist_list_state: ListState,
@@ -126,6 +138,7 @@ impl App {
             status: None,
             tick_count: 0,
             playlists: Vec::new(),
+            art: ArtState::default(),
 
             artist_list_state: ListState::default(),
             album_list_state: ListState::default(),
@@ -406,6 +419,12 @@ impl App {
                 self.now_playing.state = Some(state);
             }
             PlayerEvent::TrackChanged(track) => {
+                // Clear art cache when track changes
+                if self.art.current_uri.as_deref() != Some(&track.uri) {
+                    self.art.current_uri = Some(track.uri.clone());
+                    self.art.has_art = false;
+                    self.art.image_bytes = None;
+                }
                 self.now_playing.track = Some(track);
                 self.now_playing.position_ms = 0;
             }

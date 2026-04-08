@@ -38,41 +38,62 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             0.0
         };
 
-        // Layout: [track info left] [progress center] [time+vol right]
+        // Layout: [art (6 cols)] [track info] [progress] [time+vol+modes]
         let cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(35),
-                Constraint::Percentage(45),
+                Constraint::Length(6),
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
                 Constraint::Percentage(20),
             ])
             .split(inner);
 
-        // Left: track info
+        // Art area
+        let art_style = if app.art.has_art {
+            Style::default().fg(Color::Magenta)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        let art_placeholder = Paragraph::new("♪")
+            .alignment(Alignment::Center)
+            .style(art_style);
+        frame.render_widget(art_placeholder, cols[0]);
+
+        // Track info
         let info = format!("{state_icon} {}\n   {artist} — {}", track.name, track.album);
         let info_widget = Paragraph::new(info).style(Style::default().fg(Color::White));
-        frame.render_widget(info_widget, cols[0]);
+        frame.render_widget(info_widget, cols[1]);
 
-        // Center: progress bar
-        if cols[1].height > 0 {
+        // Progress bar
+        if cols[2].height > 0 {
             let gauge = Gauge::default()
                 .ratio(ratio)
                 .gauge_style(Style::default().fg(Color::Magenta).bg(Color::DarkGray))
                 .label("");
             let gauge_area = Rect {
-                y: cols[1].y + cols[1].height.saturating_sub(1),
+                y: cols[2].y + cols[2].height.saturating_sub(1),
                 height: 1,
-                ..cols[1]
+                ..cols[2]
             };
             frame.render_widget(gauge, gauge_area);
         }
 
-        // Right: time + volume
-        let time_vol = format!("{pos} / {dur}\nVol: {}", app.now_playing.volume);
+        // Time + volume + mode indicators
+        let shuffle_indicator = if app.now_playing.shuffle { "[S] " } else { "" };
+        let repeat_indicator = match app.now_playing.repeat {
+            rustify_core::types::RepeatMode::Off => "",
+            rustify_core::types::RepeatMode::All => "[R] ",
+            rustify_core::types::RepeatMode::One => "[R1] ",
+        };
+        let time_vol = format!(
+            "{shuffle_indicator}{repeat_indicator}{pos} / {dur}\nVol: {}",
+            app.now_playing.volume
+        );
         let right_widget = Paragraph::new(time_vol)
             .alignment(Alignment::Right)
             .style(Style::default().fg(Color::Gray));
-        frame.render_widget(right_widget, cols[2]);
+        frame.render_widget(right_widget, cols[3]);
     } else {
         let paragraph = Paragraph::new("No track playing")
             .style(Style::default().fg(Color::DarkGray))

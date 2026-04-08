@@ -1,3 +1,4 @@
+pub mod art;
 pub mod error;
 pub mod metadata;
 pub mod mixer;

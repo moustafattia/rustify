@@ -22,6 +22,8 @@ pub enum AppEvent {
     Tick,
     /// Background library scan completed
     ScanComplete(Library),
+    /// Album art loaded for a track URI
+    ArtLoaded { uri: String, data: Option<Vec<u8>> },
     /// Non-player error
     Error(String),
 }

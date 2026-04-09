@@ -8,7 +8,7 @@ use rustfft::FftPlanner;
 use crate::theme::Theme;
 
 /// Number of display bars in the spectrum visualizer.
-pub const BAR_COUNT: usize = 24;
+pub const BAR_COUNT: usize = 40;
 
 /// FFT size used for spectrum analysis.
 const FFT_SIZE: usize = 1024;
@@ -99,6 +99,7 @@ pub fn compute_spectrum_bars(samples: &[f32]) -> Vec<f32> {
     // We use logarithmic spacing: bar boundaries are exponentially spaced
     // from bin 1 to bin 512.
     let mut bars = vec![0.0f32; BAR_COUNT];
+    let bar_count = BAR_COUNT;
     let min_bin = 1.0f32;
     let max_bin = half as f32;
     let log_min = min_bin.ln();
@@ -119,6 +120,11 @@ pub fn compute_spectrum_bars(samples: &[f32]) -> Vec<f32> {
             sum += magnitudes[bin];
         }
         bars[bar_idx] = sum / count as f32;
+    }
+
+    // Apply sqrt scaling for better visibility of quiet frequencies
+    for bar in &mut bars {
+        *bar = bar.sqrt();
     }
 
     // Normalize to 0.0..1.0 based on the max bar value

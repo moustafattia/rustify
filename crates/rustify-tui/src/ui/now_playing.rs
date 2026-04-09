@@ -1,5 +1,5 @@
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::app::App;
 use crate::ui::visualizer::{self, VisualizerMode};
@@ -73,18 +73,17 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             0.0
         };
 
-        // Layout: [art (6 cols)] [track info] [progress] [time+vol+modes]
+        // Layout: [art (3 cols)] [track info (45%)] [time+vol+modes (right)]
         let cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(6),
+                Constraint::Length(3),
+                Constraint::Percentage(55),
                 Constraint::Percentage(30),
-                Constraint::Percentage(40),
-                Constraint::Percentage(20),
             ])
             .split(inner);
 
-        // Art area
+        // Art area (compact)
         let art_style = if app.art.has_art {
             Style::default().fg(app.theme.accent)
         } else {
@@ -95,23 +94,45 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             .style(art_style);
         frame.render_widget(art_placeholder, cols[0]);
 
-        // Track info
-        let info = format!("{state_icon} {}\n   {artist} — {}", track.name, track.album);
-        let info_widget = Paragraph::new(info).style(Style::default().fg(app.theme.fg));
-        frame.render_widget(info_widget, cols[1]);
+        // Track info + progress bar (two lines + progress on third)
+        let info_area = cols[1];
+        if info_area.height >= 2 {
+            // Line 1: state icon + track name
+            let line1 = format!("{state_icon} {}", track.name);
+            let line1_widget = Paragraph::new(line1).style(Style::default().fg(app.theme.fg));
+            let line1_area = Rect { height: 1, ..info_area };
+            frame.render_widget(line1_widget, line1_area);
 
-        // Progress bar
-        if cols[2].height > 0 {
-            let gauge = Gauge::default()
-                .ratio(ratio)
-                .gauge_style(Style::default().fg(app.theme.accent).bg(app.theme.border))
-                .label("");
-            let gauge_area = Rect {
-                y: cols[2].y + cols[2].height.saturating_sub(1),
-                height: 1,
-                ..cols[2]
+            // Line 2: artist — album (with ellipsis if needed)
+            let detail = format!("   {artist} — {}", track.album);
+            let max_w = info_area.width as usize;
+            let detail_display = if detail.len() > max_w && max_w > 3 {
+                format!("{}...", &detail[..max_w - 3])
+            } else {
+                detail
             };
-            frame.render_widget(gauge, gauge_area);
+            let line2_widget = Paragraph::new(detail_display).style(Style::default().fg(app.theme.fg_dim));
+            let line2_area = Rect { y: info_area.y + 1, height: 1, ..info_area };
+            frame.render_widget(line2_widget, line2_area);
+        }
+
+        // Line 3: thin progress bar using unicode
+        if info_area.height >= 3 {
+            let bar_width = info_area.width as usize;
+            let filled = (ratio * bar_width as f64) as usize;
+            let empty = bar_width.saturating_sub(filled);
+            let progress_line = Line::from(vec![
+                Span::styled(
+                    "━".repeat(filled),
+                    Style::default().fg(app.theme.accent),
+                ),
+                Span::styled(
+                    "━".repeat(empty),
+                    Style::default().fg(app.theme.border),
+                ),
+            ]);
+            let progress_area = Rect { y: info_area.y + 2, height: 1, ..info_area };
+            frame.render_widget(Paragraph::new(progress_line), progress_area);
         }
 
         // Time + volume + mode indicators
@@ -122,13 +143,13 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             rustify_core::types::RepeatMode::One => "[R1] ",
         };
         let time_vol = format!(
-            "{shuffle_indicator}{repeat_indicator}{pos} / {dur}\nVol: {}",
+            "{pos} / {dur}\n{shuffle_indicator}{repeat_indicator}Vol: {}",
             app.now_playing.volume
         );
         let right_widget = Paragraph::new(time_vol)
             .alignment(Alignment::Right)
             .style(Style::default().fg(app.theme.fg_dim));
-        frame.render_widget(right_widget, cols[3]);
+        frame.render_widget(right_widget, cols[2]);
     } else {
         let paragraph = Paragraph::new("No track playing")
             .style(Style::default().fg(app.theme.border))

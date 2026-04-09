@@ -269,6 +269,10 @@ enum InternalEvent {
     TrackEnding {
         remaining_ms: u64,
     },
+    /// Pending decode thread read metadata — held until promotion at TrackEnded.
+    PendingTrackReady(Track),
+    /// Pending decode thread failed — discard it silently (current track continues).
+    PendingDecodeFailed(String),
     /// Decode thread failed to open/decode the track and exited.
     /// Command loop must reset state to Stopped.
     DecodeFailed(String),
@@ -299,6 +303,8 @@ struct CommandLoop {
     tracklist: Tracklist,
     decode_handle: Option<DecodeHandle>,
     pending_decode: Option<DecodeHandle>,
+    /// Metadata for the pending track — emitted as TrackChanged on promotion.
+    pending_track: Option<Track>,
     audio_tx: Sender<Vec<f32>>,
     _audio_stream: Option<cpal::Stream>,
     clear_buffer: Arc<AtomicBool>,
@@ -346,6 +352,7 @@ impl CommandLoop {
             tracklist: Tracklist::new(),
             decode_handle: None,
             pending_decode: None,
+            pending_track: None,
             audio_tx,
             _audio_stream: stream.ok(),
             clear_buffer,
@@ -445,7 +452,14 @@ impl CommandLoop {
                         let handle = thread::Builder::new()
                             .name("rustify-decode-pending".into())
                             .spawn(move || {
-                                decode_thread(uri, pending_tx, control_rx, event_tx, crossfade_ms);
+                                decode_thread(
+                                    uri,
+                                    pending_tx,
+                                    control_rx,
+                                    event_tx,
+                                    crossfade_ms,
+                                    true,
+                                );
                             })
                             .expect("failed to spawn pending decode thread");
 
@@ -459,14 +473,28 @@ impl CommandLoop {
                     }
                 }
             }
+            InternalEvent::PendingTrackReady(track) => {
+                // Hold metadata until pending decode is promoted at TrackEnded
+                self.pending_track = Some(track);
+            }
+            InternalEvent::PendingDecodeFailed(msg) => {
+                // Pending decode failed — discard it, current track continues playing
+                self.stop_pending_decode();
+                eprintln!("rustify: pending decode failed: {msg}");
+            }
             InternalEvent::TrackEnded => {
                 // Gapless: promote pending decode if it exists
                 if let Some(pending) = self.pending_decode.take() {
                     if self.tracklist.next().is_some() {
                         self.decode_handle = Some(pending);
-                        // TrackChanged event was already sent by the pending decode thread
+                        // NOW emit TrackChanged with the held metadata
+                        if let Some(track) = self.pending_track.take() {
+                            *self.shared.current_track.lock().unwrap() = Some(track.clone());
+                            self.emit_callbacks(PlayerEvent::TrackChanged(track));
+                        }
                     } else {
                         self.decode_handle = None;
+                        self.pending_track = None;
                         self.set_state(PlaybackState::Stopped);
                         *self.shared.current_track.lock().unwrap() = None;
                         self.shared.time_position_ms.store(0, Ordering::Relaxed);
@@ -575,7 +603,7 @@ impl CommandLoop {
         let handle = thread::Builder::new()
             .name("rustify-decode".into())
             .spawn(move || {
-                decode_thread(uri, audio_tx, control_rx, event_tx, crossfade_ms);
+                decode_thread(uri, audio_tx, control_rx, event_tx, crossfade_ms, false);
             })
             .expect("failed to spawn decode thread");
 
@@ -588,9 +616,20 @@ impl CommandLoop {
     fn stop_decode(&mut self) {
         if let Some(handle) = self.decode_handle.take() {
             handle.control_tx.send(DecodeControl::Stop).ok();
-            // Don't join — the thread will exit when it sees Stop or channel disconnect
         }
+        self.stop_pending_decode();
         self.clear_buffer.store(true, Ordering::Relaxed);
+    }
+
+    fn stop_pending_decode(&mut self) {
+        if let Some(handle) = self.pending_decode.take() {
+            handle.control_tx.send(DecodeControl::Stop).ok();
+        }
+        self.pending_track = None;
+        // Clear the pending audio slot so cpal callback doesn't pick up stale audio
+        if let Ok(mut slot) = self.pending_audio_rx.lock() {
+            *slot = None;
+        }
     }
 
     fn set_state(&mut self, state: PlaybackState) {
@@ -638,6 +677,7 @@ fn decode_thread(
     control_rx: Receiver<DecodeControl>,
     event_tx: Sender<InternalEvent>,
     crossfade_ms: u64,
+    is_pending: bool,
 ) {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
@@ -648,10 +688,16 @@ fn decode_thread(
 
     let path = uri_to_path(&uri);
 
-    // Read metadata for TrackChanged event
+    // Read metadata — pending decoders use PendingTrackReady instead of TrackChanged
+    // so the UI doesn't switch early
     match read_metadata_from_path(&path) {
         Ok(track) => {
-            event_tx.send(InternalEvent::TrackChanged(track)).ok();
+            let event = if is_pending {
+                InternalEvent::PendingTrackReady(track)
+            } else {
+                InternalEvent::TrackChanged(track)
+            };
+            event_tx.send(event).ok();
         }
         Err(e) => {
             event_tx
@@ -660,13 +706,20 @@ fn decode_thread(
         }
     }
 
+    // Helper: send the right failure event based on pending status
+    let send_decode_failed = |tx: &Sender<InternalEvent>, msg: String, pending: bool| {
+        if pending {
+            tx.send(InternalEvent::PendingDecodeFailed(msg)).ok();
+        } else {
+            tx.send(InternalEvent::DecodeFailed(msg)).ok();
+        }
+    };
+
     // Open file with symphonia
     let file = match std::fs::File::open(&path) {
         Ok(f) => f,
         Err(e) => {
-            event_tx
-                .send(InternalEvent::DecodeFailed(format!("open: {e}")))
-                .ok();
+            send_decode_failed(&event_tx, format!("open: {e}"), is_pending);
             return;
         }
     };
@@ -685,9 +738,7 @@ fn decode_thread(
     ) {
         Ok(p) => p,
         Err(e) => {
-            event_tx
-                .send(InternalEvent::DecodeFailed(format!("probe: {e}")))
-                .ok();
+            send_decode_failed(&event_tx, format!("probe: {e}"), is_pending);
             return;
         }
     };
@@ -696,9 +747,7 @@ fn decode_thread(
     let track = match format.default_track() {
         Some(t) => t,
         None => {
-            event_tx
-                .send(InternalEvent::DecodeFailed("no audio track found".into()))
-                .ok();
+            send_decode_failed(&event_tx, "no audio track found".into(), is_pending);
             return;
         }
     };
@@ -711,9 +760,7 @@ fn decode_thread(
     {
         Ok(d) => d,
         Err(e) => {
-            event_tx
-                .send(InternalEvent::DecodeFailed(format!("decoder: {e}")))
-                .ok();
+            send_decode_failed(&event_tx, format!("decoder: {e}"), is_pending);
             return;
         }
     };

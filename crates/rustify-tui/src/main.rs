@@ -122,6 +122,8 @@ fn main() -> io::Result<()> {
     let mut app = App::new();
     app.theme = theme::Theme::from_config(&config);
     app.now_playing.volume = player.get_volume();
+    app.base_volume = player.get_volume();
+    app.replay_gain_enabled = config.replay_gain;
 
     // Create scrobbler
     let mut scrobbler = scrobble::Scrobbler::new(config.listenbrainz_token.clone());
@@ -253,6 +255,23 @@ fn main() -> io::Result<()> {
                                 .ok();
                         })
                         .ok();
+
+                    // Apply replay gain if enabled
+                    if app.replay_gain_enabled {
+                        let path = rustify_core::types::uri_to_path(&track.uri);
+                        let rg_db = rustify_core::metadata::read_replay_gain(&path);
+                        if let Some(db) = rg_db {
+                            let gain_factor = 10.0_f32.powf(db / 20.0).clamp(0.1, 2.0);
+                            let adjusted =
+                                (app.base_volume as f32 * gain_factor).clamp(0.0, 100.0) as u8;
+                            player.set_volume(adjusted);
+                            app.now_playing.volume = adjusted;
+                        } else {
+                            // No replay gain tag — use base volume
+                            player.set_volume(app.base_volume);
+                            app.now_playing.volume = app.base_volume;
+                        }
+                    }
                 }
                 app.handle_player_event(event);
             }

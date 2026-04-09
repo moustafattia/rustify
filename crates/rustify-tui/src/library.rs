@@ -94,19 +94,53 @@ impl Library {
     }
 
     /// Case-insensitive substring search across track names, artist names, and album names.
-    pub fn search(&self, query: &str) -> Vec<&Track> {
-        let query_lower = query.to_lowercase();
-        self.tracks
+    /// Fuzzy search across track names, artist names, and album names.
+    /// Returns results ranked by match quality (best first), capped at 50.
+    pub fn fuzzy_search(&self, query: &str) -> Vec<SearchResult<'_>> {
+        if query.is_empty() {
+            return Vec::new();
+        }
+
+        use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+        use nucleo_matcher::{Config, Matcher, Utf32Str};
+
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+
+        let mut results: Vec<SearchResult<'_>> = self
+            .tracks
             .iter()
-            .filter(|t| {
-                t.name.to_lowercase().contains(&query_lower)
-                    || t.album.to_lowercase().contains(&query_lower)
-                    || t.artists
-                        .iter()
-                        .any(|a| a.to_lowercase().contains(&query_lower))
+            .filter_map(|track| {
+                let haystack = format!(
+                    "{} {} {}",
+                    track.name,
+                    track.artists.first().unwrap_or(&String::new()),
+                    track.album
+                );
+                let mut buf = Vec::new();
+                let utf32 = Utf32Str::new(&haystack, &mut buf);
+                let score = pattern.score(utf32, &mut matcher)?;
+                let mut indices = Vec::new();
+                pattern.indices(utf32, &mut matcher, &mut indices);
+                Some(SearchResult {
+                    track,
+                    score,
+                    matched_indices: indices,
+                })
             })
-            .collect()
+            .collect();
+
+        results.sort_by(|a, b| b.score.cmp(&a.score));
+        results.truncate(50);
+        results
     }
+}
+
+/// A fuzzy search result with match score and highlighted character indices.
+pub struct SearchResult<'a> {
+    pub track: &'a Track,
+    pub score: u32,
+    pub matched_indices: Vec<u32>,
 }
 
 #[cfg(test)]
@@ -200,24 +234,54 @@ mod tests {
     }
 
     #[test]
-    fn search_finds_matching_tracks() {
+    fn fuzzy_search_finds_exact_match() {
         let lib = Library::from_tracks(make_tracks());
-        let results = lib.search("midnight");
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].name, "Midnight City");
+        let results = lib.fuzzy_search("Midnight City");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].track.name, "Midnight City");
     }
 
     #[test]
-    fn search_is_case_insensitive() {
+    fn fuzzy_search_partial_match() {
         let lib = Library::from_tracks(make_tracks());
-        let results = lib.search("PARANOID");
-        assert_eq!(results.len(), 1);
+        let results = lib.fuzzy_search("mid cit");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].track.name, "Midnight City");
     }
 
     #[test]
-    fn search_matches_artist_names() {
+    fn fuzzy_search_is_case_insensitive() {
         let lib = Library::from_tracks(make_tracks());
-        let results = lib.search("radiohead");
-        assert_eq!(results.len(), 1);
+        let results = lib.fuzzy_search("PARANOID");
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn fuzzy_search_matches_artist_names() {
+        let lib = Library::from_tracks(make_tracks());
+        let results = lib.fuzzy_search("radiohead");
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn fuzzy_search_empty_query_returns_empty() {
+        let lib = Library::from_tracks(make_tracks());
+        let results = lib.fuzzy_search("");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn fuzzy_search_no_match() {
+        let lib = Library::from_tracks(make_tracks());
+        let results = lib.fuzzy_search("zzzzzzzzz");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn fuzzy_search_returns_matched_indices() {
+        let lib = Library::from_tracks(make_tracks());
+        let results = lib.fuzzy_search("Midnight");
+        assert!(!results.is_empty());
+        assert!(!results[0].matched_indices.is_empty());
     }
 }

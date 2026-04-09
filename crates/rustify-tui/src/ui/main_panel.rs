@@ -177,13 +177,13 @@ fn draw_search(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Search results
     if let Some(ref library) = app.library {
-        let results = library.search(&app.search.query);
+        let results = library.fuzzy_search(&app.search.query);
         let items: Vec<ListItem> = results
             .iter()
             .take(chunks[1].height as usize)
-            .map(|t| {
-                let artist = t.artists.first().map(|a| a.as_str()).unwrap_or("Unknown");
-                ListItem::new(format!("{} — {}", t.name, artist))
+            .map(|r| {
+                let artist = r.track.artists.first().map(|a| a.as_str()).unwrap_or("Unknown");
+                ListItem::new(format!("{} — {}", r.track.name, artist))
             })
             .collect();
         let list = List::new(items)

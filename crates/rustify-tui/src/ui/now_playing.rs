@@ -100,7 +100,10 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             // Line 1: state icon + track name
             let line1 = format!("{state_icon} {}", track.name);
             let line1_widget = Paragraph::new(line1).style(Style::default().fg(app.theme.fg));
-            let line1_area = Rect { height: 1, ..info_area };
+            let line1_area = Rect {
+                height: 1,
+                ..info_area
+            };
             frame.render_widget(line1_widget, line1_area);
 
             // Line 2: artist — album (with ellipsis if needed)
@@ -111,8 +114,13 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             } else {
                 detail
             };
-            let line2_widget = Paragraph::new(detail_display).style(Style::default().fg(app.theme.fg_dim));
-            let line2_area = Rect { y: info_area.y + 1, height: 1, ..info_area };
+            let line2_widget =
+                Paragraph::new(detail_display).style(Style::default().fg(app.theme.fg_dim));
+            let line2_area = Rect {
+                y: info_area.y + 1,
+                height: 1,
+                ..info_area
+            };
             frame.render_widget(line2_widget, line2_area);
         }
 
@@ -122,16 +130,14 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             let filled = (ratio * bar_width as f64) as usize;
             let empty = bar_width.saturating_sub(filled);
             let progress_line = Line::from(vec![
-                Span::styled(
-                    "━".repeat(filled),
-                    Style::default().fg(app.theme.accent),
-                ),
-                Span::styled(
-                    "━".repeat(empty),
-                    Style::default().fg(app.theme.border),
-                ),
+                Span::styled("━".repeat(filled), Style::default().fg(app.theme.accent)),
+                Span::styled("━".repeat(empty), Style::default().fg(app.theme.border)),
             ]);
-            let progress_area = Rect { y: info_area.y + 2, height: 1, ..info_area };
+            let progress_area = Rect {
+                y: info_area.y + 2,
+                height: 1,
+                ..info_area
+            };
             frame.render_widget(Paragraph::new(progress_line), progress_area);
         }
 

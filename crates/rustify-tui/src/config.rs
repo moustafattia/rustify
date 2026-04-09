@@ -22,6 +22,7 @@ pub struct TuiConfig {
     pub custom_theme: Option<CustomThemeConfig>,
 
     #[serde(default)]
+    #[allow(dead_code)]
     pub replay_gain: bool,
 
     #[serde(default)]

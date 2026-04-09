@@ -10,7 +10,7 @@ use crate::error::RustifyError;
 use crate::metadata::read_metadata_from_path;
 use crate::mixer::Mixer;
 use crate::tracklist::Tracklist;
-use crate::types::{uri_to_path, PlaybackState, PlayerCommand, PlayerEvent, RepeatMode, Track};
+use crate::types::{uri_to_path, PlaybackState, PlayerCommand, PlayerEvent, Track};
 
 /// Number of audio chunks buffered between decode and output threads.
 /// At ~1024 frames per chunk @ 44.1kHz stereo, each chunk is ~23ms.
@@ -140,12 +140,7 @@ impl Player {
 
     /// Clone the current sample buffer contents for visualization.
     pub fn get_samples(&self) -> Vec<f32> {
-        self.sample_buffer
-            .lock()
-            .unwrap()
-            .iter()
-            .copied()
-            .collect()
+        self.sample_buffer.lock().unwrap().iter().copied().collect()
     }
 
     // --- State queries (read from shared atomic/mutex state) ---
@@ -191,10 +186,7 @@ impl Player {
             .push(callback);
     }
 
-    pub fn on_mode_change(
-        &self,
-        callback: Box<dyn Fn(bool, crate::types::RepeatMode) + Send>,
-    ) {
+    pub fn on_mode_change(&self, callback: Box<dyn Fn(bool, crate::types::RepeatMode) + Send>) {
         self.shared
             .callbacks
             .lock()
@@ -273,7 +265,10 @@ enum InternalEvent {
     Position(u64),
     TrackEnded,
     /// Decode thread is nearing the end — pre-start next decode for gapless.
-    TrackEnding { remaining_ms: u64 },
+    #[allow(dead_code)]
+    TrackEnding {
+        remaining_ms: u64,
+    },
     /// Decode thread failed to open/decode the track and exited.
     /// Command loop must reset state to Stopped.
     DecodeFailed(String),
@@ -441,8 +436,7 @@ impl CommandLoop {
                         clone.next().map(String::from)
                     };
                     if let Some(uri) = next_uri {
-                        let (pending_tx, pending_rx) =
-                            channel::bounded::<Vec<f32>>(BUFFER_CHUNKS);
+                        let (pending_tx, pending_rx) = channel::bounded::<Vec<f32>>(BUFFER_CHUNKS);
 
                         let (control_tx, control_rx) = channel::unbounded::<DecodeControl>();
                         let event_tx = self.event_tx.clone();

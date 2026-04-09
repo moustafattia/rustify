@@ -126,7 +126,9 @@ pub struct App {
     pub visualizer_state: VisualizerState,
     pub visualizer_samples: Vec<f32>,
     pub lyrics: LyricsState,
+    #[allow(dead_code)]
     pub replay_gain_enabled: bool,
+    #[allow(dead_code)]
     pub base_volume: u8,
 
     // Per-view list states for ratatui
@@ -483,7 +485,7 @@ impl App {
         if y < content_height {
             if x < sidebar_width {
                 self.focus = Focus::Sidebar;
-                if y >= 1 && y <= 4 {
+                if (1..=4).contains(&y) {
                     let nav_index = (y - 1) as usize;
                     if nav_index < NAV_ITEMS.len() {
                         self.sidebar_nav_index = nav_index;
@@ -518,6 +520,7 @@ impl App {
     }
 
     /// Remove a track from the queue by index.
+    #[allow(dead_code)]
     pub fn remove_from_queue(&mut self, index: usize) {
         if index < self.queue.track_uris.len() {
             self.queue.track_uris.remove(index);
@@ -533,6 +536,7 @@ impl App {
     }
 
     /// Swap two tracks in the queue.
+    #[allow(dead_code)]
     pub fn reorder_queue(&mut self, from: usize, to: usize) {
         if from < self.queue.track_uris.len() && to < self.queue.track_uris.len() {
             self.queue.track_uris.swap(from, to);
@@ -541,11 +545,13 @@ impl App {
     }
 
     /// Get all queue URIs (for loading into player).
+    #[allow(dead_code)]
     pub fn queue_uris(&self) -> Vec<String> {
         self.queue.track_uris.clone()
     }
 
     /// Generate M3U content from the current queue.
+    #[allow(dead_code)]
     pub fn generate_m3u_content(&self) -> String {
         let mut content = String::from("#EXTM3U\n");
         for uri in &self.queue.track_uris {
@@ -736,10 +742,7 @@ mod tests {
     #[test]
     fn save_queue_as_m3u_generates_content() {
         let mut app = make_app();
-        app.queue.track_uris = vec![
-            "file:///music/a.mp3".into(),
-            "file:///music/b.flac".into(),
-        ];
+        app.queue.track_uris = vec!["file:///music/a.mp3".into(), "file:///music/b.flac".into()];
         let content = app.generate_m3u_content();
         assert!(content.contains("#EXTM3U"));
         assert!(content.contains("/music/a.mp3"));

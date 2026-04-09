@@ -10,6 +10,7 @@ use crate::library::Library;
 
 /// Unified event type for the TUI event loop.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AppEvent {
     /// Keyboard input
     Key(KeyEvent),

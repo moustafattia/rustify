@@ -1,5 +1,4 @@
 use ratatui::style::Color;
-use serde::Deserialize;
 
 use crate::config::TuiConfig;
 
@@ -33,12 +32,12 @@ impl Theme {
     pub fn nord() -> Self {
         Self {
             name: "nord".into(),
-            fg: Color::Rgb(216, 222, 233),       // #D8DEE9
-            fg_dim: Color::Rgb(76, 86, 106),     // #4C566A
-            accent: Color::Rgb(136, 192, 208),   // #88C0D0
+            fg: Color::Rgb(216, 222, 233),        // #D8DEE9
+            fg_dim: Color::Rgb(76, 86, 106),      // #4C566A
+            accent: Color::Rgb(136, 192, 208),    // #88C0D0
             accent_dim: Color::Rgb(94, 129, 172), // #5E81AC
-            border: Color::Rgb(59, 66, 82),      // #3B4252
-            error: Color::Rgb(191, 97, 106),     // #BF616A
+            border: Color::Rgb(59, 66, 82),       // #3B4252
+            error: Color::Rgb(191, 97, 106),      // #BF616A
             visualizer: vec![
                 Color::Rgb(94, 129, 172),  // #5E81AC
                 Color::Rgb(136, 192, 208), // #88C0D0
@@ -49,12 +48,12 @@ impl Theme {
     pub fn dracula() -> Self {
         Self {
             name: "dracula".into(),
-            fg: Color::Rgb(248, 248, 242),       // #F8F8F2
-            fg_dim: Color::Rgb(98, 114, 164),    // #6272A4
-            accent: Color::Rgb(189, 147, 249),   // #BD93F9
+            fg: Color::Rgb(248, 248, 242),        // #F8F8F2
+            fg_dim: Color::Rgb(98, 114, 164),     // #6272A4
+            accent: Color::Rgb(189, 147, 249),    // #BD93F9
             accent_dim: Color::Rgb(139, 97, 199), // dimmer purple
-            border: Color::Rgb(68, 71, 90),      // #44475A
-            error: Color::Rgb(255, 85, 85),      // #FF5555
+            border: Color::Rgb(68, 71, 90),       // #44475A
+            error: Color::Rgb(255, 85, 85),       // #FF5555
             visualizer: vec![
                 Color::Rgb(98, 114, 164),  // #6272A4
                 Color::Rgb(189, 147, 249), // #BD93F9
@@ -65,12 +64,12 @@ impl Theme {
     pub fn gruvbox() -> Self {
         Self {
             name: "gruvbox".into(),
-            fg: Color::Rgb(235, 219, 178),       // #EBDBB2
-            fg_dim: Color::Rgb(146, 131, 116),   // #928374
-            accent: Color::Rgb(250, 189, 47),    // #FABD2F
+            fg: Color::Rgb(235, 219, 178),        // #EBDBB2
+            fg_dim: Color::Rgb(146, 131, 116),    // #928374
+            accent: Color::Rgb(250, 189, 47),     // #FABD2F
             accent_dim: Color::Rgb(215, 153, 33), // #D79921
-            border: Color::Rgb(60, 56, 54),      // #3C3836
-            error: Color::Rgb(251, 73, 52),      // #FB4934
+            border: Color::Rgb(60, 56, 54),       // #3C3836
+            error: Color::Rgb(251, 73, 52),       // #FB4934
             visualizer: vec![
                 Color::Rgb(104, 157, 106), // #689D6A
                 Color::Rgb(250, 189, 47),  // #FABD2F
@@ -81,12 +80,12 @@ impl Theme {
     pub fn catppuccin() -> Self {
         Self {
             name: "catppuccin".into(),
-            fg: Color::Rgb(205, 214, 244),       // #CDD6F4
-            fg_dim: Color::Rgb(88, 91, 112),     // #585B70
-            accent: Color::Rgb(203, 166, 247),   // #CBA6F7
+            fg: Color::Rgb(205, 214, 244),         // #CDD6F4
+            fg_dim: Color::Rgb(88, 91, 112),       // #585B70
+            accent: Color::Rgb(203, 166, 247),     // #CBA6F7
             accent_dim: Color::Rgb(147, 110, 191), // dimmer mauve
-            border: Color::Rgb(49, 50, 68),      // #313244
-            error: Color::Rgb(243, 139, 168),    // #F38BA8
+            border: Color::Rgb(49, 50, 68),        // #313244
+            error: Color::Rgb(243, 139, 168),      // #F38BA8
             visualizer: vec![
                 Color::Rgb(88, 91, 112),   // #585B70
                 Color::Rgb(203, 166, 247), // #CBA6F7
@@ -142,10 +141,7 @@ impl Theme {
                 }
             }
             if let Some(ref colors) = custom.visualizer {
-                let parsed: Vec<Color> = colors
-                    .iter()
-                    .filter_map(|h| parse_hex_color(h))
-                    .collect();
+                let parsed: Vec<Color> = colors.iter().filter_map(|h| parse_hex_color(h)).collect();
                 if !parsed.is_empty() {
                     theme.visualizer = parsed;
                 }

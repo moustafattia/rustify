@@ -182,7 +182,12 @@ fn draw_search(frame: &mut Frame, app: &mut App, area: Rect) {
             .iter()
             .take(chunks[1].height as usize)
             .map(|r| {
-                let artist = r.track.artists.first().map(|a| a.as_str()).unwrap_or("Unknown");
+                let artist = r
+                    .track
+                    .artists
+                    .first()
+                    .map(|a| a.as_str())
+                    .unwrap_or("Unknown");
                 ListItem::new(format!("{} — {}", r.track.name, artist))
             })
             .collect();

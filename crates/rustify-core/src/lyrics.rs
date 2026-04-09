@@ -25,7 +25,9 @@ pub fn extract_lyrics(path: &Path) -> Option<Lyrics> {
 
 fn extract_embedded_lyrics(path: &Path) -> Option<Lyrics> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag())?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
 
     if let Some(text) = tag.get_string(&ItemKey::Lyrics) {
         if !text.trim().is_empty() {

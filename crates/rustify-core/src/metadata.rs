@@ -62,7 +62,9 @@ pub fn read_metadata_from_path(path: &Path) -> Result<Track, RustifyError> {
 /// Returns the gain adjustment in dB, or None if no tag found.
 pub fn read_replay_gain(path: &Path) -> Option<f32> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag())?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
 
     if let Some(val) = tag.get_string(&ItemKey::ReplayGainTrackGain) {
         return parse_replay_gain_value(val);
@@ -71,7 +73,11 @@ pub fn read_replay_gain(path: &Path) -> Option<f32> {
 }
 
 fn parse_replay_gain_value(val: &str) -> Option<f32> {
-    let trimmed = val.trim().trim_end_matches(" dB").trim_end_matches("dB").trim();
+    let trimmed = val
+        .trim()
+        .trim_end_matches(" dB")
+        .trim_end_matches("dB")
+        .trim();
     trimmed.parse::<f32>().ok()
 }
 

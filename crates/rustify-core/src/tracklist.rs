@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use rand::seq::SliceRandom;
 use rand::rng;
+use rand::seq::SliceRandom;
 
 use crate::types::RepeatMode;
 
@@ -350,13 +350,16 @@ mod tests {
             visited.push(tl.next().unwrap().to_string());
         }
         visited.sort();
-        assert_eq!(visited, vec![
-            "file:///a.mp3",
-            "file:///b.mp3",
-            "file:///c.mp3",
-            "file:///d.mp3",
-            "file:///e.mp3",
-        ]);
+        assert_eq!(
+            visited,
+            vec![
+                "file:///a.mp3",
+                "file:///b.mp3",
+                "file:///c.mp3",
+                "file:///d.mp3",
+                "file:///e.mp3",
+            ]
+        );
     }
 
     #[test]

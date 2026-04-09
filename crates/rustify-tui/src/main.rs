@@ -106,9 +106,7 @@ fn main() -> io::Result<()> {
 
     let tx_err = tx.clone();
     player.on_error(Box::new(move |msg| {
-        tx_err
-            .send(AppEvent::Player(PlayerEvent::Error(msg)))
-            .ok();
+        tx_err.send(AppEvent::Player(PlayerEvent::Error(msg))).ok();
     }));
 
     let tx_mode = tx.clone();
@@ -170,14 +168,10 @@ fn main() -> io::Result<()> {
             Ok(AppEvent::Key(key)) => {
                 if let Some(action) = app.handle_key(key) {
                     match action {
-                        app::PlayerAction::PlayPause => {
-                            match app.now_playing.state {
-                                Some(rustify_core::types::PlaybackState::Playing) => {
-                                    player.pause()
-                                }
-                                _ => player.play(),
-                            }
-                        }
+                        app::PlayerAction::PlayPause => match app.now_playing.state {
+                            Some(rustify_core::types::PlaybackState::Playing) => player.pause(),
+                            _ => player.play(),
+                        },
                         app::PlayerAction::Next => player.next(),
                         app::PlayerAction::Previous => player.previous(),
                         app::PlayerAction::Seek(delta) => {
@@ -188,7 +182,8 @@ fn main() -> io::Result<()> {
                                 .map(|t| t.length as i64)
                                 .unwrap_or(0);
                             let new_pos = (app.now_playing.position_ms as i64 + delta)
-                                .clamp(0, track_len) as u64;
+                                .clamp(0, track_len)
+                                as u64;
                             player.seek(new_pos);
                             app.now_playing.position_ms = new_pos;
                         }
@@ -224,7 +219,9 @@ fn main() -> io::Result<()> {
                     PlayerEvent::TrackChanged(track) => scrobbler.on_track_changed(track),
                     PlayerEvent::PositionUpdate(ms) => scrobbler.on_position_update(*ms),
                     PlayerEvent::StateChanged(state) => {
-                        scrobbler.on_state_changed(*state == rustify_core::types::PlaybackState::Playing);
+                        scrobbler.on_state_changed(
+                            *state == rustify_core::types::PlaybackState::Playing,
+                        );
                     }
                     _ => {}
                 }
@@ -237,12 +234,7 @@ fn main() -> io::Result<()> {
                         .spawn(move || {
                             let path = rustify_core::types::uri_to_path(&uri);
                             let data = rustify_core::art::extract_art(&path);
-                            art_tx
-                                .send(AppEvent::ArtLoaded {
-                                    uri,
-                                    data,
-                                })
-                                .ok();
+                            art_tx.send(AppEvent::ArtLoaded { uri, data }).ok();
                         })
                         .ok();
 

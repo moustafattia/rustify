@@ -15,8 +15,7 @@ const FFT_SIZE: usize = 1024;
 
 /// Unicode block characters ordered by height (1/8 to 8/8).
 const BLOCKS: [char; 8] = [
-    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}',
-    '\u{2588}',
+    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
 ];
 
 /// Visualization display mode.
@@ -99,27 +98,22 @@ pub fn compute_spectrum_bars(samples: &[f32]) -> Vec<f32> {
     // We use logarithmic spacing: bar boundaries are exponentially spaced
     // from bin 1 to bin 512.
     let mut bars = vec![0.0f32; BAR_COUNT];
-    let bar_count = BAR_COUNT;
     let min_bin = 1.0f32;
     let max_bin = half as f32;
     let log_min = min_bin.ln();
     let log_max = max_bin.ln();
 
-    for bar_idx in 0..BAR_COUNT {
-        let lo = ((log_min + (log_max - log_min) * bar_idx as f32 / BAR_COUNT as f32).exp())
+    for (bar_idx, bar) in bars.iter_mut().enumerate() {
+        let lo =
+            ((log_min + (log_max - log_min) * bar_idx as f32 / BAR_COUNT as f32).exp()) as usize;
+        let hi = ((log_min + (log_max - log_min) * (bar_idx + 1) as f32 / BAR_COUNT as f32).exp())
             as usize;
-        let hi = ((log_min
-            + (log_max - log_min) * (bar_idx + 1) as f32 / BAR_COUNT as f32)
-            .exp()) as usize;
         let lo = lo.max(1).min(half);
         let hi = hi.max(lo + 1).min(half);
 
-        let mut sum = 0.0f32;
         let count = (hi - lo).max(1);
-        for bin in lo..hi {
-            sum += magnitudes[bin];
-        }
-        bars[bar_idx] = sum / count as f32;
+        let sum: f32 = magnitudes[lo..hi].iter().sum();
+        *bar = sum / count as f32;
     }
 
     // Apply sqrt scaling for better visibility of quiet frequencies
@@ -235,8 +229,8 @@ pub fn draw_waveform(frame: &mut Frame, area: Rect, samples: &[f32], theme: &The
     let mut lines = Vec::with_capacity(total_rows);
     for row in 0..total_rows {
         let mut spans = Vec::with_capacity(width);
-        for col in 0..width {
-            let ch = value_to_block(col_values[col], row, total_rows);
+        for &val in &col_values {
+            let ch = value_to_block(val, row, total_rows);
             spans.push(Span::styled(ch.to_string(), Style::default().fg(color)));
         }
         lines.push(Line::from(spans));

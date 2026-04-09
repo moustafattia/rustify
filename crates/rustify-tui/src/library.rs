@@ -75,10 +75,7 @@ impl Library {
 
     /// Albums for a given artist name.
     pub fn albums_by_artist(&self, artist: &str) -> &[Album] {
-        self.artists
-            .get(artist)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+        self.artists.get(artist).map(Vec::as_slice).unwrap_or(&[])
     }
 
     /// All albums across all artists (sorted by name).
@@ -137,6 +134,7 @@ impl Library {
 }
 
 /// A fuzzy search result with match score and highlighted character indices.
+#[allow(dead_code)]
 pub struct SearchResult<'a> {
     pub track: &'a Track,
     pub score: u32,

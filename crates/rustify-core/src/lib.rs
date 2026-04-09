@@ -1,5 +1,6 @@
 pub mod art;
 pub mod error;
+pub mod lyrics;
 pub mod metadata;
 pub mod mixer;
 pub mod player;

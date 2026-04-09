@@ -2,6 +2,7 @@ use std::path::Path;
 
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use lofty::tag::ItemKey;
 
 use crate::error::RustifyError;
 use crate::types::{path_to_uri, uri_to_path, Track};
@@ -55,6 +56,29 @@ pub fn read_metadata_from_path(path: &Path) -> Result<Track, RustifyError> {
         length,
         track_no,
     })
+}
+
+/// Read ReplayGain track gain from audio file tags.
+/// Returns the gain adjustment in dB, or None if no tag found.
+pub fn read_replay_gain(path: &Path) -> Option<f32> {
+    let tagged_file = Probe::open(path).ok()?.read().ok()?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
+
+    if let Some(val) = tag.get_string(&ItemKey::ReplayGainTrackGain) {
+        return parse_replay_gain_value(val);
+    }
+    None
+}
+
+fn parse_replay_gain_value(val: &str) -> Option<f32> {
+    let trimmed = val
+        .trim()
+        .trim_end_matches(" dB")
+        .trim_end_matches("dB")
+        .trim();
+    trimmed.parse::<f32>().ok()
 }
 
 #[cfg(test)]
@@ -141,5 +165,13 @@ mod tests {
     fn read_metadata_nonexistent_file_returns_error() {
         let result = read_metadata("file:///nonexistent/song.mp3");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_replay_gain_values() {
+        assert_eq!(parse_replay_gain_value("-6.5 dB"), Some(-6.5));
+        assert_eq!(parse_replay_gain_value("+3.2 dB"), Some(3.2));
+        assert_eq!(parse_replay_gain_value("-6.5dB"), Some(-6.5));
+        assert_eq!(parse_replay_gain_value("not a number"), None);
     }
 }

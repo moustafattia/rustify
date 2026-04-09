@@ -1,0 +1,12 @@
+[package]
+name = "rustify-mpris"
+version = "0.1.0"
+edition = "2021"
+description = "MPRIS2 D-Bus integration for rustify (Linux only)"
+
+[dependencies]
+rustify-core = { path = "../rustify-core" }
+crossbeam = "0.8"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"

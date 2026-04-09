@@ -16,3 +16,8 @@ dist/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code / Superpowers
+.claude/
+.clone/
+.superpowers/

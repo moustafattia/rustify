@@ -38,6 +38,25 @@ pub enum PlaybackState {
     Paused,
 }
 
+/// Repeat mode for the tracklist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RepeatMode {
+    Off,
+    All,
+    One,
+}
+
+impl RepeatMode {
+    /// Cycle to the next repeat mode: Off → All → One → Off.
+    pub fn cycle(self) -> Self {
+        match self {
+            Self::Off => Self::All,
+            Self::All => Self::One,
+            Self::One => Self::Off,
+        }
+    }
+}
+
 /// Events emitted by the player to registered callbacks.
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
@@ -45,6 +64,7 @@ pub enum PlayerEvent {
     TrackChanged(Track),
     PositionUpdate(u64),
     Error(String),
+    ModeChanged { shuffle: bool, repeat: RepeatMode },
 }
 
 /// Commands sent to the player's command thread.
@@ -60,6 +80,9 @@ pub enum PlayerCommand {
     LoadTrackUris(Vec<String>),
     ClearTracklist,
     Shutdown,
+    SetShuffle(bool),
+    SetRepeat(RepeatMode),
+    SetCrossfade(u64),
 }
 
 /// Supported audio file extensions.

@@ -18,6 +18,7 @@ mod app;
 mod config;
 mod event;
 mod library;
+mod scrobble;
 mod theme;
 mod ui;
 
@@ -124,6 +125,27 @@ fn main() -> io::Result<()> {
     app.theme = theme::Theme::from_config(&config);
     app.now_playing.volume = player.get_volume();
 
+    // Create scrobbler
+    let mut scrobbler = scrobble::Scrobbler::new(config.listenbrainz_token.clone());
+
+    // Start MPRIS (no-op on non-Linux)
+    // Create a PlayerEvent sender that maps into the AppEvent channel
+    let (mpris_tx, mpris_rx) = crossbeam::channel::unbounded::<PlayerEvent>();
+    {
+        let tx_mpris = tx.clone();
+        thread::Builder::new()
+            .name("rustify-mpris-bridge".into())
+            .spawn(move || {
+                while let Ok(ev) = mpris_rx.recv() {
+                    if tx_mpris.send(AppEvent::Player(ev)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .ok();
+    }
+    rustify_mpris::start(&player, mpris_tx);
+
     // Start background library scan if music_dirs configured
     if !config.music_dirs.is_empty() {
         app.scanning = true;
@@ -197,6 +219,15 @@ fn main() -> io::Result<()> {
                 }
             }
             Ok(AppEvent::Player(event)) => {
+                // Feed scrobbler
+                match &event {
+                    PlayerEvent::TrackChanged(track) => scrobbler.on_track_changed(track),
+                    PlayerEvent::PositionUpdate(ms) => scrobbler.on_position_update(*ms),
+                    PlayerEvent::StateChanged(state) => {
+                        scrobbler.on_state_changed(*state == rustify_core::types::PlaybackState::Playing);
+                    }
+                    _ => {}
+                }
                 // Trigger background art and lyrics extraction on track change
                 if let PlayerEvent::TrackChanged(ref track) = event {
                     let uri = track.uri.clone();

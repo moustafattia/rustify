@@ -16,6 +16,22 @@ pub struct TuiConfig {
     /// Theme preset name.
     #[serde(default = "default_theme")]
     pub theme: String,
+
+    /// Custom theme color overrides (optional).
+    #[serde(default)]
+    pub custom_theme: Option<CustomThemeConfig>,
+}
+
+/// Custom theme colors as hex strings (#RRGGBB).
+#[derive(Debug, Default, Deserialize)]
+pub struct CustomThemeConfig {
+    pub fg: Option<String>,
+    pub fg_dim: Option<String>,
+    pub accent: Option<String>,
+    pub accent_dim: Option<String>,
+    pub border: Option<String>,
+    pub error: Option<String>,
+    pub visualizer: Option<Vec<String>>,
 }
 
 fn default_alsa_device() -> String {
@@ -32,6 +48,7 @@ impl Default for TuiConfig {
             music_dirs: Vec::new(),
             alsa_device: default_alsa_device(),
             theme: default_theme(),
+            custom_theme: None,
         }
     }
 }

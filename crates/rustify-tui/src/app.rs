@@ -110,6 +110,7 @@ pub struct App {
     pub tick_count: u64,
     pub playlists: Vec<rustify_core::types::Playlist>,
     pub art: ArtState,
+    pub theme: crate::theme::Theme,
 
     // Per-view list states for ratatui
     pub artist_list_state: ListState,
@@ -139,6 +140,7 @@ impl App {
             tick_count: 0,
             playlists: Vec::new(),
             art: ArtState::default(),
+            theme: crate::theme::Theme::default_theme(),
 
             artist_list_state: ListState::default(),
             album_list_state: ListState::default(),

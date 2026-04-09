@@ -19,9 +19,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let border_style = if app.focus == Focus::Main {
-        Style::default().fg(Color::Magenta)
+        Style::default().fg(app.theme.accent)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(app.theme.border)
     };
 
     let block = Block::default()
@@ -44,7 +44,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
 
     if app.scanning {
         let loading = Paragraph::new("Scanning library...")
-            .style(Style::default().fg(Color::Yellow))
+            .style(Style::default().fg(app.theme.error))
             .alignment(Alignment::Center);
         frame.render_widget(loading, inner);
         return;
@@ -53,7 +53,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     let Some(ref library) = app.library else {
         let msg =
             Paragraph::new("No music directories configured.\nEdit ~/.config/rustify/tui.toml")
-                .style(Style::default().fg(Color::DarkGray))
+                .style(Style::default().fg(app.theme.border))
                 .alignment(Alignment::Center);
         frame.render_widget(msg, inner);
         return;
@@ -69,7 +69,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             let list = List::new(items)
                 .highlight_style(
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(app.theme.accent)
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol("> ");
@@ -88,7 +88,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             let list = List::new(items)
                 .highlight_style(
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(app.theme.accent)
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol("> ");
@@ -106,7 +106,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             let list = List::new(items)
                 .highlight_style(
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(app.theme.accent)
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol("> ");
@@ -115,7 +115,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
         MainView::Playlists => {
             if app.playlists.is_empty() {
                 let msg = Paragraph::new("No playlists found.")
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(app.theme.border));
                 frame.render_widget(msg, inner);
             } else {
                 let items: Vec<ListItem> = app
@@ -126,7 +126,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 let list = List::new(items)
                     .highlight_style(
                         Style::default()
-                            .fg(Color::Magenta)
+                            .fg(app.theme.accent)
                             .add_modifier(Modifier::BOLD),
                     )
                     .highlight_symbol("> ");
@@ -153,7 +153,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 let list = List::new(items)
                     .highlight_style(
                         Style::default()
-                            .fg(Color::Magenta)
+                            .fg(app.theme.accent)
                             .add_modifier(Modifier::BOLD),
                     )
                     .highlight_symbol("> ");
@@ -172,7 +172,7 @@ fn draw_search(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Search input
     let input = Paragraph::new(format!("/ {}", app.search.query))
-        .style(Style::default().fg(Color::Yellow));
+        .style(Style::default().fg(app.theme.error));
     frame.render_widget(input, chunks[0]);
 
     // Search results
@@ -187,7 +187,7 @@ fn draw_search(frame: &mut Frame, app: &mut App, area: Rect) {
             })
             .collect();
         let list = List::new(items)
-            .highlight_style(Style::default().fg(Color::Magenta))
+            .highlight_style(Style::default().fg(app.theme.accent))
             .highlight_symbol("> ");
         frame.render_stateful_widget(list, chunks[1], &mut app.search.results_state);
     }

@@ -45,7 +45,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // Render status line if present
     if let Some(ref status) = app.status {
         let status_widget = ratatui::widgets::Paragraph::new(status.text.as_str())
-            .style(Style::default().fg(Color::Yellow).bg(Color::DarkGray));
+            .style(Style::default().fg(app.theme.error).bg(app.theme.border));
         frame.render_widget(status_widget, status_area);
     }
 }

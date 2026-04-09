@@ -18,6 +18,7 @@ mod app;
 mod config;
 mod event;
 mod library;
+mod theme;
 mod ui;
 
 use app::App;
@@ -116,6 +117,7 @@ fn main() -> io::Result<()> {
     }));
 
     let mut app = App::new();
+    app.theme = theme::Theme::from_config(&config);
     app.now_playing.volume = player.get_volume();
 
     // Start background library scan if music_dirs configured

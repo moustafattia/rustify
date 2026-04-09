@@ -5,9 +5,9 @@ use crate::app::{App, Focus};
 
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     let border_style = if app.focus == Focus::Sidebar {
-        Style::default().fg(Color::Magenta)
+        Style::default().fg(app.theme.accent)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(app.theme.border)
     };
 
     let block = Block::default()
@@ -45,10 +45,10 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             };
             let style = if i == app.sidebar_nav_index {
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(app.theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(app.theme.fg)
             };
             ListItem::new(format!("{marker}{name}")).style(style)
         })
@@ -67,7 +67,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             ..queue_area
         };
         let header = Paragraph::new("── Queue ──")
-            .style(Style::default().fg(Color::Magenta))
+            .style(Style::default().fg(app.theme.accent))
             .alignment(Alignment::Center);
         frame.render_widget(header, header_area);
 
@@ -79,7 +79,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
         };
 
         if app.queue.track_names.is_empty() {
-            let empty = Paragraph::new("  (empty)").style(Style::default().fg(Color::DarkGray));
+            let empty = Paragraph::new("  (empty)").style(Style::default().fg(app.theme.border));
             frame.render_widget(empty, list_area);
         } else {
             let items: Vec<ListItem> = app
@@ -88,13 +88,13 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 .iter()
                 .enumerate()
                 .map(|(i, name)| {
-                    let style = Style::default().fg(Color::Gray);
+                    let style = Style::default().fg(app.theme.fg_dim);
                     ListItem::new(format!("  {}. {}", i + 1, name)).style(style)
                 })
                 .collect();
 
             let queue_list = List::new(items)
-                .highlight_style(Style::default().fg(Color::White).bg(Color::DarkGray));
+                .highlight_style(Style::default().fg(app.theme.fg).bg(app.theme.border));
             frame.render_stateful_widget(queue_list, list_area, &mut app.queue.list_state);
         }
     }

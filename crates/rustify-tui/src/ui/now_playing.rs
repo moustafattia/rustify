@@ -7,7 +7,7 @@ use rustify_core::types::PlaybackState;
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(app.theme.border));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -51,9 +51,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
 
         // Art area
         let art_style = if app.art.has_art {
-            Style::default().fg(Color::Magenta)
+            Style::default().fg(app.theme.accent)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(app.theme.border)
         };
         let art_placeholder = Paragraph::new("♪")
             .alignment(Alignment::Center)
@@ -62,14 +62,14 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
 
         // Track info
         let info = format!("{state_icon} {}\n   {artist} — {}", track.name, track.album);
-        let info_widget = Paragraph::new(info).style(Style::default().fg(Color::White));
+        let info_widget = Paragraph::new(info).style(Style::default().fg(app.theme.fg));
         frame.render_widget(info_widget, cols[1]);
 
         // Progress bar
         if cols[2].height > 0 {
             let gauge = Gauge::default()
                 .ratio(ratio)
-                .gauge_style(Style::default().fg(Color::Magenta).bg(Color::DarkGray))
+                .gauge_style(Style::default().fg(app.theme.accent).bg(app.theme.border))
                 .label("");
             let gauge_area = Rect {
                 y: cols[2].y + cols[2].height.saturating_sub(1),
@@ -92,11 +92,11 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
         );
         let right_widget = Paragraph::new(time_vol)
             .alignment(Alignment::Right)
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(app.theme.fg_dim));
         frame.render_widget(right_widget, cols[3]);
     } else {
         let paragraph = Paragraph::new("No track playing")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(Style::default().fg(app.theme.border))
             .alignment(Alignment::Center);
         frame.render_widget(paragraph, inner);
     }

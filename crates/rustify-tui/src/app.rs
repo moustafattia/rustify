@@ -1,8 +1,9 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
 use rustify_core::types::{PlaybackState, PlayerEvent, Track};
 
 use crate::library::Library;
+use crate::ui::visualizer::{VisualizerMode, VisualizerState};
 
 /// Which UI region has keyboard focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +112,9 @@ pub struct App {
     pub playlists: Vec<rustify_core::types::Playlist>,
     pub art: ArtState,
     pub theme: crate::theme::Theme,
+    pub visualizer_mode: VisualizerMode,
+    pub visualizer_state: VisualizerState,
+    pub visualizer_samples: Vec<f32>,
 
     // Per-view list states for ratatui
     pub artist_list_state: ListState,
@@ -141,6 +145,9 @@ impl App {
             playlists: Vec::new(),
             art: ArtState::default(),
             theme: crate::theme::Theme::default_theme(),
+            visualizer_mode: VisualizerMode::Spectrum,
+            visualizer_state: VisualizerState::default(),
+            visualizer_samples: Vec::new(),
 
             artist_list_state: ListState::default(),
             album_list_state: ListState::default(),
@@ -206,6 +213,10 @@ impl App {
             }
             KeyCode::Char('-') => {
                 self.now_playing.volume = self.now_playing.volume.saturating_sub(5);
+                return None;
+            }
+            KeyCode::Char('V') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.visualizer_mode = self.visualizer_mode.toggle();
                 return None;
             }
             KeyCode::Char('/') if self.focus != Focus::Search => {

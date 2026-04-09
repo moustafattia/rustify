@@ -1,6 +1,7 @@
 pub mod main_panel;
 pub mod now_playing;
 pub mod sidebar;
+pub mod visualizer;
 
 use ratatui::prelude::*;
 
@@ -14,13 +15,17 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let has_status = app.status.is_some();
     let status_height = if has_status { 1 } else { 0 };
 
-    // Split vertically: [content] [status (optional)] [now-playing (3)]
+    // Expand now-playing bar to 6 rows when a track is playing (for visualizer)
+    let is_playing = app.now_playing.track.is_some();
+    let np_height = if is_playing { 6 } else { 3 };
+
+    // Split vertically: [content] [status (optional)] [now-playing]
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(5),
             Constraint::Length(status_height),
-            Constraint::Length(3),
+            Constraint::Length(np_height),
         ])
         .split(area);
 

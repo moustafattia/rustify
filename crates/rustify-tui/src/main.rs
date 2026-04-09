@@ -221,6 +221,13 @@ fn main() -> io::Result<()> {
             }
             Ok(AppEvent::Tick) => {
                 app.handle_tick();
+                // Feed audio samples to visualizer
+                let samples = player.get_samples();
+                if !samples.is_empty() {
+                    app.visualizer_samples = samples.clone();
+                    let new_bars = ui::visualizer::compute_spectrum_bars(&samples);
+                    app.visualizer_state.apply_smoothing(&new_bars);
+                }
             }
             Ok(AppEvent::ScanComplete(library)) => {
                 app.library = Some(library);

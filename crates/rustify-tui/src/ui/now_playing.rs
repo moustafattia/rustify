@@ -2,6 +2,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
 
 use crate::app::App;
+use crate::ui::visualizer::{self, VisualizerMode};
 use rustify_core::types::PlaybackState;
 
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -15,6 +16,40 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     if inner.height == 0 || inner.width < 20 {
         return;
     }
+
+    // When inner height >= 4, split into visualizer (top) and track info (bottom 3 rows).
+    let (viz_area, info_area) = if inner.height >= 4 && app.now_playing.track.is_some() {
+        let viz_height = inner.height.saturating_sub(3);
+        let viz = Rect {
+            x: inner.x,
+            y: inner.y,
+            width: inner.width,
+            height: viz_height,
+        };
+        let info = Rect {
+            x: inner.x,
+            y: inner.y + viz_height,
+            width: inner.width,
+            height: 3.min(inner.height),
+        };
+        (Some(viz), info)
+    } else {
+        (None, inner)
+    };
+
+    // Draw the visualizer if we have space
+    if let Some(viz) = viz_area {
+        match app.visualizer_mode {
+            VisualizerMode::Spectrum => {
+                visualizer::draw_spectrum(frame, viz, &app.visualizer_state, &app.theme);
+            }
+            VisualizerMode::Waveform => {
+                visualizer::draw_waveform(frame, viz, &app.visualizer_samples, &app.theme);
+            }
+        }
+    }
+
+    let inner = info_area;
 
     if let Some(ref track) = app.now_playing.track {
         let artist = if track.artists.is_empty() {

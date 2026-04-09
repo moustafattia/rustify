@@ -20,6 +20,15 @@ pub struct TuiConfig {
     /// Custom theme color overrides (optional).
     #[serde(default)]
     pub custom_theme: Option<CustomThemeConfig>,
+
+    #[serde(default)]
+    pub replay_gain: bool,
+
+    #[serde(default)]
+    pub crossfade_ms: u64,
+
+    #[serde(default)]
+    pub listenbrainz_token: String,
 }
 
 /// Custom theme colors as hex strings (#RRGGBB).
@@ -49,6 +58,9 @@ impl Default for TuiConfig {
             alsa_device: default_alsa_device(),
             theme: default_theme(),
             custom_theme: None,
+            replay_gain: false,
+            crossfade_ms: 0,
+            listenbrainz_token: String::new(),
         }
     }
 }

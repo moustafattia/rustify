@@ -128,6 +128,10 @@ impl Player {
         self.cmd_tx.send(PlayerCommand::ClearTracklist).ok();
     }
 
+    pub fn set_crossfade(&self, ms: u64) {
+        self.cmd_tx.send(PlayerCommand::SetCrossfade(ms)).ok();
+    }
+
     pub fn shutdown(&self) {
         self.cmd_tx.send(PlayerCommand::Shutdown).ok();
     }
@@ -309,6 +313,7 @@ struct CommandLoop {
     sample_buffer: Arc<Mutex<VecDeque<f32>>>,
     #[allow(dead_code)]
     alsa_device: String,
+    crossfade_ms: u64,
 }
 
 impl CommandLoop {
@@ -352,6 +357,7 @@ impl CommandLoop {
             pending_audio_rx,
             sample_buffer,
             alsa_device,
+            crossfade_ms: 0,
         }
     }
 
@@ -408,6 +414,10 @@ impl CommandLoop {
                     repeat: self.tracklist.get_repeat(),
                 });
             }
+            PlayerCommand::SetCrossfade(ms) => {
+                // Store crossfade duration -- actual mixing uses this in Tier 3+
+                self.crossfade_ms = ms;
+            }
             PlayerCommand::Shutdown => unreachable!(),
         }
     }
@@ -436,11 +446,12 @@ impl CommandLoop {
 
                         let (control_tx, control_rx) = channel::unbounded::<DecodeControl>();
                         let event_tx = self.event_tx.clone();
+                        let crossfade_ms = self.crossfade_ms;
 
                         let handle = thread::Builder::new()
                             .name("rustify-decode-pending".into())
                             .spawn(move || {
-                                decode_thread(uri, pending_tx, control_rx, event_tx);
+                                decode_thread(uri, pending_tx, control_rx, event_tx, crossfade_ms);
                             })
                             .expect("failed to spawn pending decode thread");
 
@@ -565,11 +576,12 @@ impl CommandLoop {
         let (control_tx, control_rx) = channel::unbounded::<DecodeControl>();
         let audio_tx = self.audio_tx.clone();
         let event_tx = self.event_tx.clone();
+        let crossfade_ms = self.crossfade_ms;
 
         let handle = thread::Builder::new()
             .name("rustify-decode".into())
             .spawn(move || {
-                decode_thread(uri, audio_tx, control_rx, event_tx);
+                decode_thread(uri, audio_tx, control_rx, event_tx, crossfade_ms);
             })
             .expect("failed to spawn decode thread");
 
@@ -631,6 +643,7 @@ fn decode_thread(
     audio_tx: Sender<Vec<f32>>,
     control_rx: Receiver<DecodeControl>,
     event_tx: Sender<InternalEvent>,
+    crossfade_ms: u64,
 ) {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
@@ -717,7 +730,7 @@ fn decode_thread(
     let total_samples = track.codec_params.n_frames;
     let mut decoded_samples: u64 = 0;
     let mut track_ending_sent = false;
-    const PRE_BUFFER_MS: u64 = 3000;
+    let pre_buffer_ms: u64 = crossfade_ms.max(3000);
 
     loop {
         // Check for control messages (non-blocking when not paused)
@@ -815,7 +828,7 @@ fn decode_thread(
             if let Some(total) = total_samples {
                 let remaining_samples = total.saturating_sub(decoded_samples);
                 let remaining_ms = remaining_samples * 1000 / sample_rate as u64;
-                if remaining_ms < PRE_BUFFER_MS {
+                if remaining_ms < pre_buffer_ms {
                     event_tx
                         .send(InternalEvent::TrackEnding { remaining_ms })
                         .ok();

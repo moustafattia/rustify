@@ -77,6 +77,10 @@ fn main() -> io::Result<()> {
         }
     };
 
+    if config.crossfade_ms > 0 {
+        player.set_crossfade(config.crossfade_ms);
+    }
+
     // Register player callbacks to push into event channel
     let tx_state = tx.clone();
     player.on_state_change(Box::new(move |state| {
@@ -193,7 +197,7 @@ fn main() -> io::Result<()> {
                 }
             }
             Ok(AppEvent::Player(event)) => {
-                // Trigger background art extraction on track change
+                // Trigger background art and lyrics extraction on track change
                 if let PlayerEvent::TrackChanged(ref track) = event {
                     let uri = track.uri.clone();
                     let art_tx = tx.clone();
@@ -210,6 +214,22 @@ fn main() -> io::Result<()> {
                                 .ok();
                         })
                         .ok();
+
+                    let lyrics_uri = track.uri.clone();
+                    let lyrics_tx = tx.clone();
+                    thread::Builder::new()
+                        .name("rustify-lyrics".into())
+                        .spawn(move || {
+                            let path = rustify_core::types::uri_to_path(&lyrics_uri);
+                            let data = rustify_core::lyrics::extract_lyrics(&path);
+                            lyrics_tx
+                                .send(AppEvent::LyricsLoaded {
+                                    uri: lyrics_uri,
+                                    data,
+                                })
+                                .ok();
+                        })
+                        .ok();
                 }
                 app.handle_player_event(event);
             }
@@ -217,6 +237,13 @@ fn main() -> io::Result<()> {
                 if app.art.current_uri.as_deref() == Some(&uri) {
                     app.art.has_art = data.is_some();
                     app.art.image_bytes = data;
+                }
+            }
+            Ok(AppEvent::LyricsLoaded { uri, data }) => {
+                if app.lyrics.lyrics.is_none() || app.art.current_uri.as_deref() == Some(&uri) {
+                    app.lyrics.lyrics = data;
+                    app.lyrics.current_line = 0;
+                    app.lyrics.scroll_offset = 0;
                 }
             }
             Ok(AppEvent::Tick) => {

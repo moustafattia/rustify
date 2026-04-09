@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use crossterm::event::{self, Event, KeyEvent, MouseEvent};
+use rustify_core::lyrics::Lyrics;
 use rustify_core::types::PlayerEvent;
 
 use crate::library::Library;
@@ -24,6 +25,8 @@ pub enum AppEvent {
     ScanComplete(Library),
     /// Album art loaded for a track URI
     ArtLoaded { uri: String, data: Option<Vec<u8>> },
+    /// Lyrics loaded for a track URI
+    LyricsLoaded { uri: String, data: Option<Lyrics> },
     /// Non-player error
     Error(String),
 }

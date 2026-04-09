@@ -1,5 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
+use rustify_core::lyrics::Lyrics;
 use rustify_core::types::{PlaybackState, PlayerEvent, Track};
 
 use crate::library::Library;
@@ -89,6 +90,15 @@ pub struct QueueState {
     pub track_names: Vec<String>,
 }
 
+/// Lyrics overlay state.
+#[derive(Debug, Default)]
+pub struct LyricsState {
+    pub active: bool,
+    pub lyrics: Option<Lyrics>,
+    pub current_line: usize,
+    pub scroll_offset: usize,
+}
+
 /// Status message shown temporarily above the now-playing bar.
 #[derive(Debug)]
 pub struct StatusMessage {
@@ -115,6 +125,9 @@ pub struct App {
     pub visualizer_mode: VisualizerMode,
     pub visualizer_state: VisualizerState,
     pub visualizer_samples: Vec<f32>,
+    pub lyrics: LyricsState,
+    pub replay_gain_enabled: bool,
+    pub base_volume: u8,
 
     // Per-view list states for ratatui
     pub artist_list_state: ListState,
@@ -148,6 +161,9 @@ impl App {
             visualizer_mode: VisualizerMode::Spectrum,
             visualizer_state: VisualizerState::default(),
             visualizer_samples: Vec::new(),
+            lyrics: LyricsState::default(),
+            replay_gain_enabled: false,
+            base_volume: 100,
 
             artist_list_state: ListState::default(),
             album_list_state: ListState::default(),
@@ -217,6 +233,10 @@ impl App {
             }
             KeyCode::Char('V') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.visualizer_mode = self.visualizer_mode.toggle();
+                return None;
+            }
+            KeyCode::Char('L') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.lyrics.active = !self.lyrics.active;
                 return None;
             }
             KeyCode::Char('/') if self.focus != Focus::Search => {

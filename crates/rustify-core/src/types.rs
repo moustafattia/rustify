@@ -82,6 +82,7 @@ pub enum PlayerCommand {
     Shutdown,
     SetShuffle(bool),
     SetRepeat(RepeatMode),
+    SetCrossfade(u64),
 }
 
 /// Supported audio file extensions.

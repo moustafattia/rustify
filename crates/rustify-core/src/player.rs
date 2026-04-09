@@ -25,12 +25,16 @@ pub struct PlayerConfig {
     pub music_dirs: Vec<PathBuf>,
 }
 
+/// Maximum number of f32 samples held in the visualization sample buffer.
+const SAMPLE_BUFFER_CAP: usize = 4096;
+
 /// The main player handle. All methods are non-blocking — they send commands
 /// to the internal command thread via a crossbeam channel.
 pub struct Player {
     cmd_tx: Sender<PlayerCommand>,
     shared: Arc<SharedState>,
     mixer: Arc<Mixer>,
+    sample_buffer: Arc<Mutex<VecDeque<f32>>>,
     #[allow(dead_code)] // used by Python bindings layer
     music_dirs: Vec<PathBuf>,
     _command_thread: Option<JoinHandle<()>>,
@@ -43,15 +47,23 @@ impl Player {
         let (cmd_tx, cmd_rx) = channel::unbounded::<PlayerCommand>();
         let shared = Arc::new(SharedState::new());
         let mixer = Arc::new(Mixer::new(100));
+        let sample_buffer = Arc::new(Mutex::new(VecDeque::with_capacity(SAMPLE_BUFFER_CAP)));
 
         let shared_clone = Arc::clone(&shared);
         let mixer_clone = Arc::clone(&mixer);
+        let sample_buffer_clone = Arc::clone(&sample_buffer);
         let alsa_device = config.alsa_device.clone();
 
         let handle = thread::Builder::new()
             .name("rustify-cmd".into())
             .spawn(move || {
-                let mut cmd_loop = CommandLoop::new(cmd_rx, shared_clone, mixer_clone, alsa_device);
+                let mut cmd_loop = CommandLoop::new(
+                    cmd_rx,
+                    shared_clone,
+                    mixer_clone,
+                    sample_buffer_clone,
+                    alsa_device,
+                );
                 cmd_loop.run();
             })
             .map_err(|e| RustifyError::Audio(format!("failed to spawn command thread: {e}")))?;
@@ -60,6 +72,7 @@ impl Player {
             cmd_tx,
             shared,
             mixer,
+            sample_buffer,
             music_dirs: config.music_dirs,
             _command_thread: Some(handle),
         })
@@ -117,6 +130,18 @@ impl Player {
 
     pub fn shutdown(&self) {
         self.cmd_tx.send(PlayerCommand::Shutdown).ok();
+    }
+
+    // --- Sample buffer for visualization ---
+
+    /// Clone the current sample buffer contents for visualization.
+    pub fn get_samples(&self) -> Vec<f32> {
+        self.sample_buffer
+            .lock()
+            .unwrap()
+            .iter()
+            .copied()
+            .collect()
     }
 
     // --- State queries (read from shared atomic/mutex state) ---
@@ -281,6 +306,8 @@ struct CommandLoop {
     /// Shared slot for pending audio channel — cpal callback reads this for gapless swap.
     pending_audio_rx: Arc<Mutex<Option<Receiver<Vec<f32>>>>>,
     #[allow(dead_code)]
+    sample_buffer: Arc<Mutex<VecDeque<f32>>>,
+    #[allow(dead_code)]
     alsa_device: String,
 }
 
@@ -289,6 +316,7 @@ impl CommandLoop {
         cmd_rx: Receiver<PlayerCommand>,
         shared: Arc<SharedState>,
         mixer: Arc<Mixer>,
+        sample_buffer: Arc<Mutex<VecDeque<f32>>>,
         alsa_device: String,
     ) -> Self {
         let (event_tx, event_rx) = channel::unbounded::<InternalEvent>();
@@ -302,6 +330,7 @@ impl CommandLoop {
             Arc::clone(&mixer),
             Arc::clone(&clear_buffer),
             Arc::clone(&pending_audio_rx),
+            Arc::clone(&sample_buffer),
         );
 
         if let Err(ref e) = stream {
@@ -321,6 +350,7 @@ impl CommandLoop {
             _audio_stream: stream.ok(),
             clear_buffer,
             pending_audio_rx,
+            sample_buffer,
             alsa_device,
         }
     }
@@ -836,6 +866,7 @@ fn create_output_stream(
     mixer: Arc<Mixer>,
     clear_buffer: Arc<AtomicBool>,
     pending_audio_rx: Arc<Mutex<Option<Receiver<Vec<f32>>>>>,
+    sample_buffer: Arc<Mutex<VecDeque<f32>>>,
 ) -> Result<cpal::Stream, RustifyError> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -902,12 +933,24 @@ fn create_output_stream(
                     };
                     let right = buf.pop_front().unwrap_or(left);
 
+                    let left_out = left * gain;
+                    let right_out = right * gain;
+
                     for (i, sample) in frame.iter_mut().enumerate() {
                         *sample = match i {
-                            0 => left * gain,
-                            1 => right * gain,
+                            0 => left_out,
+                            1 => right_out,
                             _ => 0.0,
                         };
+                    }
+
+                    // Push samples into visualization buffer (non-blocking)
+                    if let Ok(mut sbuf) = sample_buffer.try_lock() {
+                        sbuf.push_back(left_out);
+                        sbuf.push_back(right_out);
+                        while sbuf.len() > SAMPLE_BUFFER_CAP {
+                            sbuf.pop_front();
+                        }
                     }
                 }
             },
